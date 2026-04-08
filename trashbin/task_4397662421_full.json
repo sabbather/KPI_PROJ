@@ -1,0 +1,222 @@
+{
+  "id": "MAAAAAEGHwDV",
+  "accountId": "IEAGWGLX",
+  "title": "Specyfikacje automatyczne",
+  "description": "",
+  "briefDescription": "",
+  "parentIds": [
+    "MQAAAAEGHvie"
+  ],
+  "superParentIds": [],
+  "sharedIds": [
+    "KUAXCYUL",
+    "KUAXCYJW",
+    "KUAXCZE5",
+    "KX7X2BSA",
+    "KUAXCYD7",
+    "KUAXCYUZ",
+    "KUAXCY3G",
+    "KUAXCY2C",
+    "KUAW5HIL",
+    "KUAXCYCY"
+  ],
+  "responsibleIds": [
+    "KUAXCYJW"
+  ],
+  "status": "Active",
+  "importance": "Normal",
+  "createdDate": "2026-03-11T15:36:55Z",
+  "updatedDate": "2026-03-26T08:06:10Z",
+  "dates": {
+    "type": "Planned",
+    "duration": 20160,
+    "start": "2026-02-02T09:00:00",
+    "due": "2026-03-31T17:00:00"
+  },
+  "scope": "WsTask",
+  "authorIds": [
+    "KUAW5HIL"
+  ],
+  "customStatusId": "IEAGWGLXJMGYX4NM",
+  "hasAttachments": false,
+  "permalink": "https://app-eu.wrike.com/open.htm?id=4397662421",
+  "priority": "01732c008000000000004880",
+  "followedByMe": true,
+  "followerIds": [
+    "KUAXCYJW",
+    "KUAW5HIL"
+  ],
+  "superTaskIds": [],
+  "subTaskIds": [],
+  "dependencyIds": [],
+  "metadata": [],
+  "customFields": [],
+  "effortAllocation": {
+    "allocatedEffort": 1896,
+    "responsibleAllocation": [
+      {
+        "userId": "KUAXCYJW",
+        "dailyAllocation": [
+          {
+            "date": "2026-02-02",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-03",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-04",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-05",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-06",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-09",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-10",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-11",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-12",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-13",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-16",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-17",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-18",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-19",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-20",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-23",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-24",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-25",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-26",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-02-27",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-02",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-03",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-04",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-05",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-06",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-09",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-10",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-11",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-12",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-13",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-16",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-17",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-18",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-19",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-20",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-23",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-24",
+            "effortMinutes": 300
+          },
+          {
+            "date": "2026-03-26",
+            "effortMinutes": 42
+          },
+          {
+            "date": "2026-03-27",
+            "effortMinutes": 42
+          }
+        ]
+      }
+    ],
+    "mode": "Flexible",
+    "totalEffort": 1800
+  }
+}

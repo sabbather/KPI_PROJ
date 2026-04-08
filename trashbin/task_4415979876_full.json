@@ -1,0 +1,140 @@
+{
+  "task": {
+    "id": "MAAAAAEHNoFk",
+    "accountId": "IEAGWGLX",
+    "title": "OGRODZENIE",
+    "description": "",
+    "briefDescription": "",
+    "parentIds": [
+      "MQAAAAEF0Buz"
+    ],
+    "superParentIds": [],
+    "sharedIds": [
+      "KUAXCYUL",
+      "KUAXCYJW",
+      "KUAXCZE5",
+      "KX7X2BSA",
+      "KUAW5IPR",
+      "KUAXFRMB",
+      "KUAXCYD7",
+      "KUAXCYUZ",
+      "KUAXCY3G",
+      "KUAXCY2C",
+      "KUAW5HIL",
+      "KUAXCYCY"
+    ],
+    "responsibleIds": [],
+    "status": "Active",
+    "importance": "Normal",
+    "createdDate": "2026-03-25T13:53:16Z",
+    "updatedDate": "2026-03-25T13:54:08Z",
+    "dates": {
+      "type": "Backlog"
+    },
+    "scope": "WsTask",
+    "authorIds": [
+      "KUAXCYJW"
+    ],
+    "customStatusId": "IEAGWGLXJMGYX4NC",
+    "hasAttachments": false,
+    "permalink": "https://app-eu.wrike.com/open.htm?id=4415979876",
+    "priority": "01bd4c008000000000009800",
+    "followedByMe": true,
+    "followerIds": [
+      "KUAXCYJW"
+    ],
+    "superTaskIds": [],
+    "subTaskIds": [
+      "MAAAAAEF_czK"
+    ],
+    "dependencyIds": [],
+    "metadata": [],
+    "customFields": [],
+    "entityTypeId": "IEAGWGLXPIAHEHEZ"
+  },
+  "summary": {
+    "subtasks": {
+      "count": 1,
+      "total_effort_hours": 0.0,
+      "completed_count": 1,
+      "overdue_count": 0,
+      "completion_rate": 100.0
+    },
+    "task_effort": {
+      "total_effort_minutes": 0,
+      "total_effort_hours": 0,
+      "allocation_mode": "None"
+    },
+    "dates": {
+      "type": "Backlog",
+      "start": null,
+      "due": null,
+      "duration_minutes": null
+    }
+  },
+  "timelogs": [],
+  "subtasks": [
+    {
+      "id": "MAAAAAEF_czK",
+      "accountId": "IEAGWGLX",
+      "title": "poprawa furtki + chodnika",
+      "description": "do furtki doprowadzi\u0107 peszel 50<br />",
+      "briefDescription": "do furtki doprowadzi\u0107 peszel 50",
+      "parentIds": [
+        "IEAGWGLXI7777777"
+      ],
+      "superParentIds": [
+        "MQAAAAEF0Buz"
+      ],
+      "sharedIds": [
+        "KUAXCYUL",
+        "KUAXCYJW",
+        "KUAXCZE5",
+        "KX7X2BSA",
+        "KUAW5IPR",
+        "KUAXFRMB",
+        "KUAXCYD7",
+        "KUAXCYUZ",
+        "KUAXCY3G",
+        "KUAXCY2C",
+        "KUAW5HIL",
+        "KUAXCYCY"
+      ],
+      "responsibleIds": [
+        "KUAXCZE5"
+      ],
+      "status": "Completed",
+      "importance": "Normal",
+      "createdDate": "2026-03-10T12:52:40Z",
+      "updatedDate": "2026-03-25T13:53:16Z",
+      "completedDate": "2026-03-11T10:36:59Z",
+      "dates": {
+        "type": "Backlog"
+      },
+      "scope": "WsTask",
+      "authorIds": [
+        "KUAXCZE5"
+      ],
+      "customStatusId": "IEAGWGLXJMGYX4ND",
+      "hasAttachments": false,
+      "permalink": "https://app-eu.wrike.com/open.htm?id=4395486410",
+      "priority": "016c58007fffffffffff0400",
+      "followedByMe": false,
+      "followerIds": [
+        "KUAXCZE5"
+      ],
+      "superTaskIds": [
+        "MAAAAAEHNoFk"
+      ],
+      "subTaskIds": [],
+      "dependencyIds": [],
+      "metadata": [],
+      "customFields": []
+    }
+  ],
+  "metadata": {
+    "fetched_at": "2026-03-27T19:27:41.988987+00:00",
+    "task_id": "MAAAAAEHNoFk",
+    "ui_id": "4415979876"
+  }
+}

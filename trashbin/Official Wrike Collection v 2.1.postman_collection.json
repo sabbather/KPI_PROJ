@@ -1,0 +1,5544 @@
+{
+	"info": {
+		"_postman_id": "aae52a66-1117-4efd-8914-4a3a17eea6d1",
+		"name": "Official Wrike Collection v 2.1",
+		"description": "Use the collection as a reference to the official [API documentation](https://developers.wrike.com/)documentation/\n\nOnce imported you should create an environment with two variables.\n\nAPIToken containing your Wrike API Token \nWrikeAPI containing the API URL Base like \n* https://www.wrike.com/api/v4\n* https://eu-app.wrike.com/api/v4",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "8229905"
+	},
+	"item": [
+		{
+			"name": "Contacts",
+			"item": [
+				{
+					"name": "Get Information about me",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/contacts?me",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"contacts"
+							],
+							"query": [
+								{
+									"key": "me",
+									"value": null
+								}
+							]
+						},
+						"description": "This API call will get the authenticated users record\n\nhttps://developers.wrike.com/api/v4/contacts/#query-contacts"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Contacts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/contacts?deleted=false&fields=[metadata,workScheduleId,currentBillRate,currentCostRate,jobRoleId]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"contacts"
+							],
+							"query": [
+								{
+									"key": "deleted",
+									"value": "false",
+									"description": "optional"
+								},
+								{
+									"key": "fields",
+									"value": "[metadata,workScheduleId,currentBillRate,currentCostRate,jobRoleId]"
+								}
+							]
+						},
+						"description": "The API call will get all contact records in Wrike. This includes user records and groups.\n\nhttps://developers.wrike.com/api/v4/contacts/#query-contacts"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Information about specific contact",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/contacts/KUAFY3BJ?fields=[metadata,workScheduleId]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"contacts",
+								"KUAFY3BJ"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[metadata,workScheduleId]"
+								}
+							]
+						},
+						"description": "This API call will get information about a specifc user or group in Wrike. Options are to get metadata and the ID of the associated work schedule\n\nhttps://developers.wrike.com/api/v4/contacts/#query-contacts"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Metadata on Specific Contact",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/contacts/KUAFY3BJ?metadata=[{\"key\":\"ForeignKey\",\"value\":\"100\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"contacts",
+								"KUAFY3BJ"
+							],
+							"query": [
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"ForeignKey\",\"value\":\"100\"}]"
+								}
+							]
+						},
+						"description": "This API call will update the meta data on the user contact record. Be aware that the meta data record can only be accessed by the user self.\n\nhttps://developers.wrike.com/api/v4/contacts/#modify-contact"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Get Specific User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/users/KUAHQUAK",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"users",
+								"KUAHQUAK"
+							]
+						},
+						"description": "This API method will get details about a specific User. You can get the ID using the Contacts methods\n\nhttps://developers.wrike.com/api/v4/users/#query-user"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Specific User",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/users/KUAH2VZU?profile={\"accountId\":\"IEACW7SV\",\"role\":\"User\",\"external\":\"true\"}",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"users",
+								"KUAH2VZU"
+							],
+							"query": [
+								{
+									"key": "profile",
+									"value": "{\"accountId\":\"IEACW7SV\",\"role\":\"User\",\"external\":\"true\"}"
+								}
+							]
+						},
+						"description": "This API method can update a user account on specific Wrike Account, with a specific Role (User or Collaborator) and you can toggle the user between regular and collborator. \n\nThe included example updates the user KUAH2VZU on account IEACW7SV. The user is made a external user (role=user and external=true)\n\nhttps://developers.wrike.com/api/v4/users/#modify-user"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Groups",
+			"item": [
+				{
+					"name": "Query all Groups",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/groups",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"groups"
+							]
+						},
+						"description": "This API call will get all groups in Wrike\n\nhttps://developers.wrike.com/api/v4/groups/#query-groups"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Specific Group",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/groups/KX74ERNE",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"groups",
+								"KX74ERNE"
+							]
+						},
+						"description": "This API call will get a specific group in Wrike\n\nhttps://developers.wrike.com/api/v4/groups/#query-groups"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Group",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/groups?title=New Group&members=[KUAH2VZU]&parent=KX73D4KC&avatar={\"letters\":\"01\",\"color\":\"%236EFF33\"}&metadata=[{\"key\":\"foreignKey\",\"value\":\"100\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"groups"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Group"
+								},
+								{
+									"key": "members",
+									"value": "[KUAH2VZU]"
+								},
+								{
+									"key": "parent",
+									"value": "KX73D4KC"
+								},
+								{
+									"key": "avatar",
+									"value": "{\"letters\":\"01\",\"color\":\"#6EFF33\"}"
+								},
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"foreignKey\",\"value\":\"100\"}]"
+								}
+							]
+						},
+						"description": "This API call will create a new group Wrike named \"New Group\" with a single member \"KUAH2VZU\". \nThe group will be a sub-group to \"KX73D4KC\". \nThe group avatar will be \"01\" with a very light green color. \nIt will have a metadata key named \"foreignKey\" with the value \"100\"\n\nhttps://developers.wrike.com/api/v4/groups/#create-groups"
+					},
+					"response": []
+				},
+				{
+					"name": "Modify Group",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/groups/KX73B4IV?title=Old Group&addMembers=[KUAFY3BJ,KUAHUBHL]&avatar={\"letters\":\"02\",\"color\":\"%23FF33D7\"}&metadata=[{\"key\":\"foreignKey\",\"value\":\"200\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"groups",
+								"KX73B4IV"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "Old Group"
+								},
+								{
+									"key": "addMembers",
+									"value": "[KUAFY3BJ,KUAHUBHL]"
+								},
+								{
+									"key": "avatar",
+									"value": "{\"letters\":\"02\",\"color\":\"#FF33D7\"}"
+								},
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"foreignKey\",\"value\":\"200\"}]"
+								},
+								{
+									"key": "parent",
+									"value": "KX73D4KC",
+									"disabled": true
+								}
+							]
+						},
+						"description": "This API call will update the group Wrike with ID \"KX73B4IV\"\n \nThe name of the group will be \"Old Group\" and two new members will be added (\"KUAFY3BJ\" and \"KUAHUBHL\")\nThe group avatar will be updated to be \"02\" with a sharp pink color. \nThe meta data key \"foreignKey\" will be created or updated with the value \"200\"\n\nIt is also possible to add/update a parent group. In this example the parameter is turned off\n\nhttps://developers.wrike.com/api/v4/groups/#modify-groups"
+					},
+					"response": []
+				},
+				{
+					"name": "Builk Modify Group",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "members",
+									"value": "",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "{{WrikeAPI}}/groups_bulk?members=[{\"id\":\"KX74ERNE\",\"addMembers\":[\"KUAJRJHA\",\"KUAJRJHB\"],\"removeMembers\":[\"KUAJRJHA\"]}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"groups_bulk"
+							],
+							"query": [
+								{
+									"key": "members",
+									"value": "[{\"id\":\"KX74ERNE\",\"addMembers\":[\"KUAJRJHA\",\"KUAJRJHB\"],\"removeMembers\":[\"KUAJRJHA\"]}]"
+								}
+							]
+						},
+						"description": "This API call will update the group Wrike with ID \"KX73B4IV\"\n \nThe name of the group will be \"Old Group\" and two new members will be added (\"KUAFY3BJ\" and \"KUAHUBHL\")\nThe group avatar will be updated to be \"02\" with a sharp pink color. \nThe meta data key \"foreignKey\" will be created or updated with the value \"200\"\n\nIt is also possible to add/update a parent group. In this example the parameter is turned off\n\nhttps://developers.wrike.com/api/v4/groups/#modify-groups"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Group Test",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/groups/KX73B4IV?test=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"groups",
+								"KX73B4IV"
+							],
+							"query": [
+								{
+									"key": "test",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Check if the group \"KX73B4IV\" can be deleted\n\nIf the group cannot be deleted the error value \"not_allowed\" will be returned.\n\nIf the group can be deleted no error will be deleted.\n\nThis will NOT delete the group\n\nhttp://developers.wrike.com/api/v4/groups/#delete-groups"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Group",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/groups/KX73B4IV",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"groups",
+								"KX73B4IV"
+							]
+						},
+						"description": "Delete the group \"KX73B4IV\"\n\nhttp://developers.wrike.com/api/v4/groups/#delete-groups"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Invitations",
+			"item": [
+				{
+					"name": "Query Invitations",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/invitations",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"invitations"
+							]
+						},
+						"description": "Get all invitations\n\nhttps://developers.wrike.com/api/v4/invitations/#query-invitations"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Invitation",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/invitations?email=carl.stevens@example.com&firstName=Carl&lastName=Stevens&role=User&external=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"invitations"
+							],
+							"query": [
+								{
+									"key": "email",
+									"value": "carl.stevens@example.com",
+									"description": "Required"
+								},
+								{
+									"key": "firstName",
+									"value": "Carl",
+									"description": "Optional"
+								},
+								{
+									"key": "lastName",
+									"value": "Stevens",
+									"description": "Optional"
+								},
+								{
+									"key": "role",
+									"value": "User",
+									"description": "Optional"
+								},
+								{
+									"key": "external",
+									"value": "true",
+									"description": "Optional"
+								},
+								{
+									"key": "subject",
+									"value": "Invitation to Our Wrike",
+									"description": "Not available for Free Accounts",
+									"disabled": true
+								},
+								{
+									"key": "message",
+									"value": "Here is your personal invitation to our Wrike account",
+									"description": "Not available for Free Accounts",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Send a new invitation to email carl.stevens@example.com. The invitation is for user to join as external user\n\nIf you are on a paid account you can customize subject and message send to the user (disabled in this example)\n\nhttps://developers.wrike.com/api/v4/invitations/#query-invitations"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Invitation",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/invitations/IEACW7SVJEAIX5WI?resend&role=user&external=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"invitations",
+								"IEACW7SVJEAIX5WI"
+							],
+							"query": [
+								{
+									"key": "resend",
+									"value": null,
+									"description": "Optional"
+								},
+								{
+									"key": "role",
+									"value": "user",
+									"description": "Optional"
+								},
+								{
+									"key": "external",
+									"value": "false",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "When you update an invitation, you can elect to resend the invitation with the parameter \"resend\"\n\nIn the same update you can also update the role to either \"user\" or \"collaborator\". \nIf you update to \"user\" you can also troggle between \"regular\" or \"external\" user by setting the \"external\" parameter \"true\" or \"false\"\n\nhttps://developers.wrike.com/api/v4/invitations/#update-invitation"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Inivtation",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/invitations/IEACW7SVJEAIX5WI",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"invitations",
+								"IEACW7SVJEAIX5WI"
+							]
+						},
+						"description": "You can delete the invitation by simply providing the IP\n\nhttps://developers.wrike.com/api/v4/invitations/#delete-invitation"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Accounts",
+			"item": [
+				{
+					"name": "Get Account Information",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/account?fields=[subscription,metadata,customFields]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"account"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[subscription,metadata,customFields]",
+									"description": "Optional"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Modify Account",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/account?metadata=[{\"key\":\"foreignKey\",\"value\":\"100\"},{\"key\":\"foreignKey2\",\"value\":\"200\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"account"
+							],
+							"query": [
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"foreignKey\",\"value\":\"100\"},{\"key\":\"foreignKey2\",\"value\":\"200\"}]",
+									"description": "Optional"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Workflows",
+			"item": [
+				{
+					"name": "Query Workflows",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workflows",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workflows"
+							]
+						},
+						"description": "Get all workflows in the account\n\nhttps://developers.wrike.com/api/v4/workflows/#query-workflows"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Workflows",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workflows?name=New Workflow",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workflows"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "New Workflow"
+								}
+							]
+						},
+						"description": "Create a new workflow with the name \"New Workflow\"\n\nIt will be create with an Active and Completed workflow status\n\nhttps://developers.wrike.com/api/v4/workflows/#create-workflow"
+					},
+					"response": []
+				},
+				{
+					"name": "Modify Workflows",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workflows/IEAEGKICK4CIXF6O?hidden=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workflows",
+								"IEAEGKICK4CIXF6O"
+							],
+							"query": [
+								{
+									"key": "hidden",
+									"value": "false",
+									"description": "Optional"
+								},
+								{
+									"key": "customStatus",
+									"value": "{\"name\":\"In design\",\"color\":\"Green\",\"group\":\"Active\"}",
+									"description": "Optional and will only add new states",
+									"disabled": true
+								},
+								{
+									"key": "name",
+									"value": "New Workflow Test",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Update the workflow. You can update the Name, add new workflow states and toggle the hidden flag which will hide the workflow in the Wrike UI\n\nhttps://developers.wrike.com/api/v4/workflows/#query-workflows"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Custom Fields",
+			"item": [
+				{
+					"name": "Get All Custom Fields",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/customfields",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"customfields"
+							]
+						},
+						"description": "Get all custom fields\n\nhttps://developers.wrike.com/api/v4/custom-fields/#query-custom-fields"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Customfields",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/customfields/IEACW7SVJUABN6OT",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"customfields",
+								"IEACW7SVJUABN6OT"
+							]
+						},
+						"description": "Get details of custom fields. Provide IDs in a list (up to 100 IDs)\n\nhttps://developers.wrike.com/api/v4/custom-fields/#query-custom-fields"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Custom Field",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/customfields?title=New Custom Field&type=DropDown&shareds=[KUAH2VZU,KUAFY3BJ]&settings={\"inheritanceType\":\"Projects\",\"values\": [\"A\",\"B\",\"C\"],\"allowOtherValues\":\"true\"}",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"customfields"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Custom Field",
+									"description": "Required"
+								},
+								{
+									"key": "type",
+									"value": "DropDown",
+									"description": "Required"
+								},
+								{
+									"key": "shareds",
+									"value": "[KUAH2VZU,KUAFY3BJ]",
+									"description": "Optional"
+								},
+								{
+									"key": "settings",
+									"value": "{\"inheritanceType\":\"Projects\",\"values\": [\"A\",\"B\",\"C\"],\"allowOtherValues\":\"true\"}",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Create a new custom field. This can be simple or complex. Check documentation for details on the parameter settings\n\nIn this example, create new new custom field with the name \"New Custom Field\" with the type \"DropDown\". \n\nThe custom field is shared with two users [KUAH2VZU,KUAFY3BJ] and applies to Projects only.\n\nThe values of the dropdown is [A,B,C] and users are allowed to provide other values as well.\n\nhttps://developers.wrike.com/api/v4/custom-fields/#create-custom-field"
+					},
+					"response": []
+				},
+				{
+					"name": "Modify Custom Field",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/customfields/IEACW7SVJUABN6OT?title=Old Custom Field&type=DropDown&addShareds=[KUAGQUT3,KUAH3CJL]&removeShareds=[KUAH2VZU]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"customfields",
+								"IEACW7SVJUABN6OT"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "Old Custom Field",
+									"description": "Required"
+								},
+								{
+									"key": "type",
+									"value": "DropDown",
+									"description": "Required"
+								},
+								{
+									"key": "addShareds",
+									"value": "[KUAGQUT3,KUAH3CJL]",
+									"description": "Optional"
+								},
+								{
+									"key": "removeShareds",
+									"value": "[KUAH2VZU]"
+								},
+								{
+									"key": "settings",
+									"value": "{\"inheritanceType\":\"Projects\",\"values\": [\"A\",\"B\",\"C\"],\"allowOtherValues\":\"true\"}",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Modify existin custom field. This can be simple or complex. Check documentation for details on the parameter settings\n\nIn this example, the custom field gets the name \"Old Custom Field\" and the type is updated to \"DropDown\". \n\nThe custom field is shared with addtional two users [KUAGQUT3,KUAH3CJL] and user [KUAH2VZU] is removed.\n\nThe settings are not updated but can be.\n\nhttps://developers.wrike.com/api/v4/custom-fields/#modify-custom-field"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Custom Field",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/customfields/IEACW7SVJUABJLC4",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"customfields",
+								"IEACW7SVJUABJLC4"
+							]
+						},
+						"description": "Delete a custom field.\n\nThis is a hidden API Method and is not documented in the official API documentation\n\nBe very careful when using this method. It will remove not only the custom field but also the data stored in them. There is not ability to restore any of this"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Folder & Projects",
+			"item": [
+				{
+					"name": "Get Folder Tree (Account) by meta data",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders?descendants=true&metadata={\"key\":\"foreignKey\",\"value\":\"100\"}&project=true&deleted=false&fields=[metadata,hasAttachments,attachmentCount,description,briefDescription,customFields,customColumnIds,superParentIds,space,contractType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders"
+							],
+							"query": [
+								{
+									"key": "descendants",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "metadata",
+									"value": "{\"key\":\"foreignKey\",\"value\":\"100\"}",
+									"description": "Optional"
+								},
+								{
+									"key": "project",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "deleted",
+									"value": "false",
+									"description": "Optional (true for search in recycle bin)"
+								},
+								{
+									"key": "fields",
+									"value": "[metadata,hasAttachments,attachmentCount,description,briefDescription,customFields,customColumnIds,superParentIds,space,contractType]",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Get all Projects (Project true) on the account (descendants true) where a meta key \"foreignKey\" contains the value \"200\"\n\nDo not search in the recycle bin and return all possible fields\n\nhttps://developers.wrike.com/api/v4/folders-projects/#get-folder-tree"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Folder Tree (Space) by updated Date",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4QPMRH2/folders?descendants=false&project=false&fields=[customFields]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4QPMRH2",
+								"folders"
+							],
+							"query": [
+								{
+									"key": "descendants",
+									"value": "false",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "project",
+									"value": "false",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "fields",
+									"value": "[customFields]"
+								}
+							]
+						},
+						"description": "Get all Folders (Project false) on the account (descendants true) that was updated between\n\n{\"start\":\"2020-06-01T00:00:00Z\",\"end\":\"2020-06-29T13:11:22Z\"}\n\nReturn all possible fields\n\nhttps://developers.wrike.com/api/v4/folders-projects/#get-folder-tree"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Folder Tree (Folder) by custom field",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEAB2BV6I4LPDEQP/folders?project=false&descendants=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEAB2BV6I4LPDEQP",
+								"folders"
+							],
+							"query": [
+								{
+									"key": "customField",
+									"value": "",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "updatedDate",
+									"value": "",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "contractTypes",
+									"value": "",
+									"description": "Optional (Wrike Resource Only [Billable|Non-Billable])",
+									"disabled": true
+								},
+								{
+									"key": "customField",
+									"value": "{\"id\":\"IEAB67VPJUAAZ4W2\",\"comparator\":\"EqualTo\",\"value\":\"Content\"}",
+									"disabled": true
+								},
+								{
+									"key": "project",
+									"value": "false"
+								},
+								{
+									"key": "customField",
+									"value": "{\"id\":\"IEAB2BV6JUAAW2ID\",\"comparator\":\"EqualTo\",\"value\":\"1123021\"}",
+									"disabled": true
+								},
+								{
+									"key": "descendants",
+									"value": "false"
+								},
+								{
+									"key": "customField",
+									"value": "{\"id\":\"IEAB2BV6JUAAW2ID', '\",\"comparator\":\"EqualTo\",\"value\":\"",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all Folders/Projects under [IEACW7SVI4PMYIO6] (descendants true) where the value of custom field [IEACW7SVJUABJLU7] is [EqualTo] \"Foster Brewing\"\n\nReturn all possible fields\n\nhttps://developers.wrike.com/api/v4/folders-projects/#get-folder-tree"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Folder by Permalink",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://www.wrike.com/api/v4/folders?permalink=https://www.wrike.com/open.htm?id=771814718",
+							"protocol": "https",
+							"host": [
+								"www",
+								"wrike",
+								"com"
+							],
+							"path": [
+								"api",
+								"v4",
+								"folders"
+							],
+							"query": [
+								{
+									"key": null,
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "permalink",
+									"value": "https://www.wrike.com/open.htm?id=771814718"
+								}
+							]
+						},
+						"description": "Get folder by permalink\n\nThis is a very efficient way to get from the Wrike UI to the API. If you want to find the specific folder or project you are using in the Wrike UI simple turn the permalink into a Wrike API ID\n\nhttps://developers.wrike.com/api/v4/folders-projects/#get-folder-tree"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Folder by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PX3YZS?fields=[briefDescription,customColumnIds,attachmentCount,contractType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PX3YZS"
+							],
+							"query": [
+								{
+									"key": null,
+									"value": null,
+									"disabled": true
+								},
+								{
+									"key": "fields",
+									"value": "[briefDescription,customColumnIds,attachmentCount,contractType]"
+								}
+							]
+						},
+						"description": "Get folder/project by ID\n\nReturn all possible values\n\nhttps://developers.wrike.com/api/v4/folders-projects/#get-folder-tree"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Project",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PMYIO6/folders?title=New Project&description=This is a new project&shareds=[KUAH2VZU,KUAFY3BJ]&metadata=[{\"key\":\"foreignKey\",\"value\":\"100\"},{\"key\":\"foreignKey2\",\"value\":\"200\"}]&project={\"ownerIds\":[KUAFY3BJ],\"customStatusId\":\"IEACW7SVJMBJA6SI\",\"startDate\":\"2020-07-01\",\"endDate\":\"2020-11-30\",\"contractType\":\"NonBillable\"}&fields=[contractType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PMYIO6",
+								"folders"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Project",
+									"description": "Required"
+								},
+								{
+									"key": "description",
+									"value": "This is a new project",
+									"description": "Optional"
+								},
+								{
+									"key": "shareds",
+									"value": "[KUAH2VZU,KUAFY3BJ]",
+									"description": "Optional"
+								},
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"foreignKey\",\"value\":\"100\"},{\"key\":\"foreignKey2\",\"value\":\"200\"}]",
+									"description": "Optional"
+								},
+								{
+									"key": "customFields",
+									"value": "[{\"id\":\"IEACW7SVJUABJLU7\",\"value\":\"GlenCorp\"}]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "customColumns",
+									"value": "[\"IEACW7SVJUABN6OT\",\"IEACW7SVJUABN6OU\"]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "project",
+									"value": "{\"ownerIds\":[KUAFY3BJ],\"customStatusId\":\"IEACW7SVJMBJA6SI\",\"startDate\":\"2020-07-01\",\"endDate\":\"2020-11-30\",\"contractType\":\"NonBillable\"}",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[contractType]",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Create a new Project with the name \"New Project\" and a short description\n\nThe Project is shared with the users [KUAH2VZU,KUAFY3BJ] and has to meta keys [foreignKey, foreignKey2]\n\nThe project owner is [KUAFY3BJ] and runs from 01/07 to 30/11. The status of the project is [IEACW7SVJMBJA6SI] and is non-billable\n\nhttps://developers.wrike.com/api/v4/folders-projects/#create-folder"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Folder",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PMYIO6/folders?title=New Folder&description=This is a new folder&shareds=[KUAH2VZU,KUAFY3BJ]&metadata=[{\"key\":\"foreignKey\",\"value\":\"100\"},{\"key\":\"foreignKey2\",\"value\":\"200\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PMYIO6",
+								"folders"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Folder",
+									"description": "Required"
+								},
+								{
+									"key": "description",
+									"value": "This is a new folder",
+									"description": "Optional"
+								},
+								{
+									"key": "shareds",
+									"value": "[KUAH2VZU,KUAFY3BJ]",
+									"description": "Optional"
+								},
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"foreignKey\",\"value\":\"100\"},{\"key\":\"foreignKey2\",\"value\":\"200\"}]",
+									"description": "Optional"
+								},
+								{
+									"key": "customFields",
+									"value": "[{\"id\":\"IEACW7SVJUABJLU7\",\"value\":\"GlenCorp\"}]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "customColumns",
+									"value": "[\"IEACW7SVJUABN6OT\",\"IEACW7SVJUABN6OU\"]",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Create a new Folder with the name \"New Folder\" and a short description\n\nThe Folder is shared with the users [KUAH2VZU,KUAFY3BJ] and has to meta keys [foreignKey, foreignKey2]\n\nhttps://developers.wrike.com/api/v4/folders-projects/#create-folder"
+					},
+					"response": []
+				},
+				{
+					"name": "Modify Project",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PMYIO6?title=New Project 2&description=This is an updated project&addParents=[IEACW7SVI4MGTQJQ]&addShareds=[KUAGQUTS]&removeShareds=[KUAGQU3I,KUAH2VZU]&metadata=[{\"key\":\"foreignKey\",\"value\":\"100\"},{\"key\":\"foreignKey2\",\"value\":\"200\"}]&project={\"ownerIds\":[KUAFY3BJ],\"customStatusId\":\"IEACW7SVJMBJA6SI\",\"startDate\":\"2020-07-01\",\"endDate\":\"2020-11-30\",\"contractType\":\"NonBillable\"}&fields=[contractType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PMYIO6"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Project 2",
+									"description": "Required"
+								},
+								{
+									"key": "description",
+									"value": "This is an updated project",
+									"description": "Optional"
+								},
+								{
+									"key": "addParents",
+									"value": "[IEACW7SVI4MGTQJQ]"
+								},
+								{
+									"key": "addShareds",
+									"value": "[KUAGQUTS]",
+									"description": "Optional"
+								},
+								{
+									"key": "removeShareds",
+									"value": "[KUAGQU3I,KUAH2VZU]"
+								},
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"foreignKey\",\"value\":\"100\"},{\"key\":\"foreignKey2\",\"value\":\"200\"}]",
+									"description": "Optional"
+								},
+								{
+									"key": "project",
+									"value": "{\"ownerIds\":[KUAFY3BJ],\"customStatusId\":\"IEACW7SVJMBJA6SI\",\"startDate\":\"2020-07-01\",\"endDate\":\"2020-11-30\",\"contractType\":\"NonBillable\"}",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[contractType]",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Update project name to \"New Project 2\" and the description.\n\nAdd a parent folder [IEACW7SVI4MGTQJQ] and share with additionally one user [KUAGQUTS]\n\nUnshare the folder with two users [KUAGQU3I,KUAH2VZU] and add two meta keys to the project\n\nUpdate the project owner, status and start/end date as well\n\nAdd contractType to the return result\n\nhttps://developers.wrike.com/api/v4/folders-projects/#modify-folder"
+					},
+					"response": []
+				},
+				{
+					"name": "Move Folder/Project to Another Folder",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PMYIO6?addParents=IEACW7SVI4PX3ZTA&removeParents=IEACW7SVI4PX3ZTB",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PMYIO6"
+							],
+							"query": [
+								{
+									"key": "addParents",
+									"value": "IEACW7SVI4PX3ZTA"
+								},
+								{
+									"key": "removeParents",
+									"value": "IEACW7SVI4PX3ZTB"
+								}
+							]
+						},
+						"description": "Update project name to \"New Project 2\" and the description.\n\nAdd a parent folder [IEACW7SVI4MGTQJQ] and share with additionally one user [KUAGQUTS]\n\nUnshare the folder with two users [KUAGQU3I,KUAH2VZU] and add two meta keys to the project\n\nUpdate the project owner, status and start/end date as well\n\nAdd contractType to the return result\n\nhttps://developers.wrike.com/api/v4/folders-projects/#modify-folder"
+					},
+					"response": []
+				},
+				{
+					"name": "Modify Folder",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PX3ZTA?customFields=[{\"id\":\"IEACW7SVJUABJLU7\",\"value\":\"GlenCorp\"}]&fields=[contractType]&title=New Folder 2&description=This is an updated folder&removeParents=[IEACW7SVI4MGTQJQ]&addShareds=[KUAGQU3I,KUAH2VZU]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PX3ZTA"
+							],
+							"query": [
+								{
+									"key": "customFields",
+									"value": "[{\"id\":\"IEACW7SVJUABJLU7\",\"value\":\"GlenCorp\"}]",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[contractType]",
+									"description": "Optional"
+								},
+								{
+									"key": "title",
+									"value": "New Folder 2"
+								},
+								{
+									"key": "description",
+									"value": "This is an updated folder"
+								},
+								{
+									"key": "removeParents",
+									"value": "[IEACW7SVI4MGTQJQ]"
+								},
+								{
+									"key": "addShareds",
+									"value": "[KUAGQU3I,KUAH2VZU]"
+								}
+							]
+						},
+						"description": "Update folder name to \"New Folder 2\" and the description.\n\nRemove the folder from the parent folder/project [IEACW7SVI4MGTQJQ]\n\nShare the folder with two users [KUAGQU3I,KUAH2VZU] and add/update the custom field [IEACW7SVJUABJLU7] to the value \"GlenCorp\"\n\nAdd contractType to the return result\n\nhttps://developers.wrike.com/api/v4/folders-projects/#modify-folder"
+					},
+					"response": []
+				},
+				{
+					"name": "Mass Update Custom Fields on Folders/Projects",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PMYIO6,IEACW7SVI4PMYIO6,IEACW7SVI4PX3YZS?customFields=[{\"id\":\"IEACW7SVJUABJLU7\",\"value\":\"GlenCorp\"}]&fields=[contractType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PMYIO6,IEACW7SVI4PMYIO6,IEACW7SVI4PX3YZS"
+							],
+							"query": [
+								{
+									"key": "customFields",
+									"value": "[{\"id\":\"IEACW7SVJUABJLU7\",\"value\":\"GlenCorp\"}]",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[contractType]",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Mass update up to 100 folders/projects with a single call. You can add or update the values of custom fields\n\nThe example updates a single custom field value on 3 folders/projects\n\nhttps://developers.wrike.com/api/v4/folders-projects/#modify-folder"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Folder",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PX3ZTA",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PX3ZTA"
+							],
+							"query": [
+								{
+									"key": null,
+									"value": null,
+									"disabled": true
+								}
+							]
+						},
+						"description": "Delete the folder\n\nhttps://developers.wrike.com/api/v4/folders-projects/#delete-folder"
+					},
+					"response": []
+				},
+				{
+					"name": "Copy Template (Folder/Project)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/copy_folder/IEACW7SVI4OMYHGQ?parent=IEACW7SVI4PMYIO6&title=New Project from Template&titlePrefix=NPFT&copyDescriptions=true&copyResponsibles=true&copyCustomFields=true&copyCustomStatuses=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"copy_folder",
+								"IEACW7SVI4OMYHGQ"
+							],
+							"query": [
+								{
+									"key": "parent",
+									"value": "IEACW7SVI4PMYIO6",
+									"description": "Required"
+								},
+								{
+									"key": "title",
+									"value": "New Project from Template",
+									"description": "Required"
+								},
+								{
+									"key": "titlePrefix",
+									"value": "NPFT",
+									"description": "Optional"
+								},
+								{
+									"key": "copyDescriptions",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "copyResponsibles",
+									"value": "true",
+									"description": "Optional (true or false)Optional"
+								},
+								{
+									"key": "addResponsibles",
+									"value": "[]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "removeResponsibles",
+									"value": "[][",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "copyCustomFields",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "copyCustomStatuses",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "copyStatuses",
+									"value": "true",
+									"description": "Optional (true or false)",
+									"disabled": true
+								},
+								{
+									"key": "copyParents",
+									"value": "false",
+									"description": "Optional (most likely false else it will be tagged to your template folder)",
+									"disabled": true
+								},
+								{
+									"key": "rescheduleDate",
+									"value": null,
+									"description": "Optional (yyyy-MM-dd)",
+									"disabled": true
+								},
+								{
+									"key": "rescheduleMode",
+									"value": null,
+									"description": "Optional (start or end)",
+									"disabled": true
+								},
+								{
+									"key": "entryLimit",
+									"value": null,
+									"description": "Optional (max 250)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Copy Folder is the equivilent of the duplication in the Wrike UI\n\nThe parameters mostly follows what you can do in the UI\n\nThe example here creates a copy of the project [IEACW7SVI4OMYHGQ] and places the duplicate in the folder [IEACW7SVI4PMYIO6]\n\nThe new project will be named \"New Project from Template\" and all tasks/folders will be prefix'ed with \"NPFT\"\n\nInclude descriptions, responsibled, custom fields and custom statuses in the new copy\n\nhttps://developers.wrike.com/api/v4/folders-projects/#copy-folder"
+					},
+					"response": []
+				},
+				{
+					"name": "Copy Template Async (Folder/Project)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/copy_folder_async/IEACW7SVI4OMYHGQ?parent=IEACW7SVI4PMYIO6&title=New Project from Template Async&titlePrefix=NPFTA&copyDescriptions=true&copyResponsibles=true&copyCustomFields=true&copyCustomStatuses=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"copy_folder_async",
+								"IEACW7SVI4OMYHGQ"
+							],
+							"query": [
+								{
+									"key": "parent",
+									"value": "IEACW7SVI4PMYIO6",
+									"description": "Required"
+								},
+								{
+									"key": "title",
+									"value": "New Project from Template Async",
+									"description": "Required"
+								},
+								{
+									"key": "titlePrefix",
+									"value": "NPFTA",
+									"description": "Optional"
+								},
+								{
+									"key": "copyDescriptions",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "copyResponsibles",
+									"value": "true",
+									"description": "Optional (true or false)Optional"
+								},
+								{
+									"key": "addResponsibles",
+									"value": "[]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "removeResponsibles",
+									"value": "[][",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "copyCustomFields",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "copyCustomStatuses",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "copyStatuses",
+									"value": "true",
+									"description": "Optional (true or false)",
+									"disabled": true
+								},
+								{
+									"key": "copyParents",
+									"value": "false",
+									"description": "Optional (most likely false else it will be tagged to your template folder)",
+									"disabled": true
+								},
+								{
+									"key": "rescheduleDate",
+									"value": null,
+									"description": "Optional (yyyy-MM-dd)",
+									"disabled": true
+								},
+								{
+									"key": "rescheduleMode",
+									"value": null,
+									"description": "Optional (start or end)",
+									"disabled": true
+								},
+								{
+									"key": "entryLimit",
+									"value": null,
+									"description": "Optional (max 250)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Copy Folder is the equivilent of the duplication in the Wrike UI\n\nThe parameters mostly follows what you can do in the UI\n\nThe example here creates a copy of the project [IEACW7SVI4OMYHGQ] and places the duplicate in the folder [IEACW7SVI4PMYIO6]\n\nThe new project will be named \"New Project from Template\" and all tasks/folders will be prefix'ed with \"NPFT\"\n\nInclude descriptions, responsibled, custom fields and custom statuses in the new copy\n\nhttps://developers.wrike.com/api/v4/folders-projects/#copy-folder"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tasks",
+			"item": [
+				{
+					"name": "Get Task by Permalink",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks?permalink=https://www.wrike.com/open.htm?id=1083934699",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "permalink",
+									"value": "https://www.wrike.com/open.htm?id=1083934699"
+								}
+							]
+						},
+						"description": "Get task by permalink\n\nThis is a very efficient way to get from the Wrike UI to the API. If you want to find the specific task are using in the Wrike UI simple turn the permalink into a Wrike API ID\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKRAJXB7L?fields=[customItemTypeId,finance,billingType,effortAllocation,responsiblePlaceholderIds,attachmentCount,recurrent]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKRAJXB7L"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[customItemTypeId,finance,billingType,effortAllocation,responsiblePlaceholderIds,attachmentCount,recurrent]"
+								}
+							]
+						},
+						"description": "Get task information by ID\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Multiple Tasks by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQZEBEUN,IEACW7SVKQPX4WHN?fields=[recurrent,attachmentCount,effortAllocation,billingType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQZEBEUN,IEACW7SVKQPX4WHN"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[recurrent,attachmentCount,effortAllocation,billingType]",
+									"description": "Optional (effortAllocation is only supported with Wrike Resource)"
+								}
+							]
+						},
+						"description": "Get multiple tasks by comma separated IDs\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Tasks in the entire account",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks?descendants=true&status=Active&importance=Normal&dueDate={\"start\":\"2020-07-01\",\"end\":\"2020-07-07\"}&type=Planned&fields=[recurrent,attachmentCount,effortAllocation,billingType]&customField={\"id\":\"IEACW7SVJUABKK54\",\"comparator\":\"IsNotEmpty\"}",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "descendants",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"description": "Optional"
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"description": "Optional"
+								},
+								{
+									"key": "dueDate",
+									"value": "{\"start\":\"2020-07-01\",\"end\":\"2020-07-07\"}",
+									"description": "Optional"
+								},
+								{
+									"key": "type",
+									"value": "Planned",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[recurrent,attachmentCount,effortAllocation,billingType]"
+								},
+								{
+									"key": "customField",
+									"value": "{\"id\":\"IEACW7SVJUABKK54\",\"comparator\":\"IsNotEmpty\"}"
+								}
+							]
+						},
+						"description": "Search for tasks in the entire account\n\nThe result will only include tasks that is shared with the authenticated user (determined by the API Token)\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Tasks in a specific Space",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/spaces/IEACW7SVI4O6BDQE/tasks?descendants=true&status=Active&importance=Normal&type=Planned&fields=[recurrent,attachmentCount,effortAllocation,billingType]&dueDate={\"start\":\"2020-07-01\",\"end\":\"2020-07-07\"}",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"spaces",
+								"IEACW7SVI4O6BDQE",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "descendants",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"description": "Optional"
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"description": "Optional"
+								},
+								{
+									"key": "type",
+									"value": "Planned",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[recurrent,attachmentCount,effortAllocation,billingType]"
+								},
+								{
+									"key": "dueDate",
+									"value": "{\"start\":\"2020-07-01\",\"end\":\"2020-07-07\"}"
+								}
+							]
+						},
+						"description": "Search for tasks in a specific space\n\nThe result will only include tasks that is shared with the authenticated user (determined by the API Token)\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Tasks in a specific Folder/Project",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYFIY/tasks?descendants=true&status=Active&importance=Normal&type=Planned&fields=[recurrent,attachmentCount,effortAllocation,billingType]&dueDate={\"start\":\"2020-07-01\",\"end\":\"2020-07-07\"}&pageSize=200",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYFIY",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "descendants",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"description": "Optional"
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"description": "Optional"
+								},
+								{
+									"key": "type",
+									"value": "Planned",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[recurrent,attachmentCount,effortAllocation,billingType]"
+								},
+								{
+									"key": "dueDate",
+									"value": "{\"start\":\"2020-07-01\",\"end\":\"2020-07-07\"}"
+								},
+								{
+									"key": "pageSize",
+									"value": "200"
+								}
+							]
+						},
+						"description": "Search for tasks in a specific Folder or Project\n\nThe result will only include tasks that is shared with the authenticated user (determined by the API Token)\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Tasks & Subtasks in a specific Folder/Project",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYFIY/tasks?descendants=true&subTasks=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYFIY",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "descendants",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "subTasks",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Search for tasks in a specific Folder or Project\n\nThe result will only include tasks that is shared with the authenticated user (determined by the API Token)\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Subtask in folder",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYHGQ/tasks?title=New Subtask&description=This is a longer description<br />You can also include <b>HTML</b>&importance=Normal&superTasks=[IEACW7SVKQPZDS4M]&customStatus=IEACW7SVJMAAAAAA&fields=[billingType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYHGQ",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Subtask",
+									"description": "Required"
+								},
+								{
+									"key": "description",
+									"value": "This is a longer description<br />You can also include <b>HTML</b>",
+									"description": "Optional"
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"description": "Optional"
+								},
+								{
+									"key": "superTasks",
+									"value": "[IEACW7SVKQPZDS4M]",
+									"description": "Optional"
+								},
+								{
+									"key": "customStatus",
+									"value": "IEACW7SVJMAAAAAA",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[billingType]",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Create a new task in a folder\n\nhttps://developers.wrike.com/api/v4/tasks/#create-task"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Task in folder",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4XAB5J6/tasks?title=BTA Supertask",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4XAB5J6",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "BTA Supertask",
+									"description": "Required"
+								},
+								{
+									"key": "description",
+									"value": "This is a longer description<br />You can also include <b>HTML</b>",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"description": "Optional (only if customStatus is not set)",
+									"disabled": true
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "fields",
+									"value": "[billingType]",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Create a new task in a folder\n\nhttps://developers.wrike.com/api/v4/tasks/#create-task"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Task in folder with duration based schedule, effort and billingType",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYHGQ/tasks?title=New Task with Effort&description=This is a longer description<br />You can also include <b>HTML</b>&status=Active&importance=Normal&dates={\"type\":\"Planned\",\"start\":\"2020-07-07\",\"duration\":240}&effortAllocation={\"mode\":\"Basic\",\"totalEffort\":240}&billingType=Billable&fields=[effortAllocation,billingType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYHGQ",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Task with Effort",
+									"description": "Required"
+								},
+								{
+									"key": "description",
+									"value": "This is a longer description<br />You can also include <b>HTML</b>",
+									"description": "Optional"
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"description": "Optional (only if customStatus is not set)"
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"description": "Optional"
+								},
+								{
+									"key": "dates",
+									"value": "{\"type\":\"Planned\",\"start\":\"2020-07-07\",\"duration\":240}",
+									"description": "Optional (add either duration or due)"
+								},
+								{
+									"key": "effortAllocation",
+									"value": "{\"mode\":\"Basic\",\"totalEffort\":240}",
+									"description": "Optional (Wrike Resource Only)"
+								},
+								{
+									"key": "billingType",
+									"value": "Billable",
+									"description": "Optional (Wrike Resource Only)"
+								},
+								{
+									"key": "fields",
+									"value": "[effortAllocation,billingType]",
+									"description": "Optional (Wrike Resource Only)"
+								}
+							]
+						},
+						"description": "Create a new task in a folder\n\nhttps://developers.wrike.com/api/v4/tasks/#create-task"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Task in folder with date schedule, effort and billingType",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYHGQ/tasks?title=New Task with Effort 2&description=This is a longer description<br />You can also include <b>HTML</b>&status=Active&importance=Normal&dates={\"type\":\"Planned\",\"start\":\"2020-07-07\",\"due\":\"2020-07-08\"}&effortAllocation={\"mode\":\"Basic\",\"totalEffort\":240}&billingType=Billable&fields=[effortAllocation,billingType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYHGQ",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Task with Effort 2",
+									"description": "Required"
+								},
+								{
+									"key": "description",
+									"value": "This is a longer description<br />You can also include <b>HTML</b>",
+									"description": "Optional"
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"description": "Optional (only if customStatus is not set)"
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"description": "Optional"
+								},
+								{
+									"key": "dates",
+									"value": "{\"type\":\"Planned\",\"start\":\"2020-07-07\",\"due\":\"2020-07-08\"}",
+									"description": "Optional (add either duration or due)"
+								},
+								{
+									"key": "effortAllocation",
+									"value": "{\"mode\":\"Basic\",\"totalEffort\":240}",
+									"description": "Optional (Wrike Resource Only)"
+								},
+								{
+									"key": "billingType",
+									"value": "Billable",
+									"description": "Optional (Wrike Resource Only)"
+								},
+								{
+									"key": "fields",
+									"value": "[effortAllocation,billingType]",
+									"description": "Optional (Wrike Resource Only)"
+								}
+							]
+						},
+						"description": "Create a new task in a folder\n\nhttps://developers.wrike.com/api/v4/tasks/#create-task"
+					},
+					"response": []
+				},
+				{
+					"name": "Create a Milestone Task in folder with schedule",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYHGQ/tasks?title=New Milestone&description=This is a longer description<br />You can also include <b>HTML</b>&status=Active&importance=Normal&dates={\"type\":\"Milestone\",\"due\":\"2020-07-08\"}",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYHGQ",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Milestone",
+									"description": "Required"
+								},
+								{
+									"key": "description",
+									"value": "This is a longer description<br />You can also include <b>HTML</b>",
+									"description": "Optional"
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"description": "Optional (only if customStatus is not set)"
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"description": "Optional"
+								},
+								{
+									"key": "dates",
+									"value": "{\"type\":\"Milestone\",\"due\":\"2020-07-08\"}",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Create a new task in a folder\n\nhttps://developers.wrike.com/api/v4/tasks/#create-task"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Task description and schedule",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKRAKTS4T?customStatus=IEACW7SVJMCH37N4",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKRAKTS4T"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "New Task with Effort Updated",
+									"disabled": true
+								},
+								{
+									"key": "description",
+									"value": "This is an even longer description<br />You can also include <b>HTML</b> and some <a href=\"https://wrike.com\">formatiing</a>",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "Active",
+									"disabled": true
+								},
+								{
+									"key": "importance",
+									"value": "Normal",
+									"disabled": true
+								},
+								{
+									"key": "dates",
+									"value": "{\"type\":\"Planned\",\"start\":\"2020-07-13\",\"due\":\"2020-07-15\"}",
+									"disabled": true
+								},
+								{
+									"key": "effortAllocation",
+									"value": "{\"mode\":\"Basic\",\"totalEffort\":240}",
+									"disabled": true
+								},
+								{
+									"key": "billingType",
+									"value": "Billable",
+									"disabled": true
+								},
+								{
+									"key": "fields",
+									"value": "[effortAllocation,billingType]",
+									"disabled": true
+								},
+								{
+									"key": "addResponsibles",
+									"value": "[KUAFZQDP]",
+									"disabled": true
+								},
+								{
+									"key": "customStatus",
+									"value": "IEACW7SVJMCH37N4"
+								}
+							]
+						},
+						"description": "Update Task by ID. You can update a lot of different parts of the task this way.\n\nhttps://developers.wrike.com/api/v4/tasks/#modify-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Multiple Tasks Custom Field Values",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPX4WGU,IEACW7SVKQPX4WHN?customFields=[{\"id\":\"IEACW7SVJUAA73HW\",\"value\":\"ABC\"},{\"id\":\"IEACW7SVJUAA75KE\",\"value\":\"100\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPX4WGU,IEACW7SVKQPX4WHN"
+							],
+							"query": [
+								{
+									"key": "customFields",
+									"value": "[{\"id\":\"IEACW7SVJUAA73HW\",\"value\":\"ABC\"},{\"id\":\"IEACW7SVJUAA75KE\",\"value\":\"100\"}]"
+								}
+							]
+						},
+						"description": "Update multiple tasks separated by comma. You can update custom fields and effort allocation (not included in this example)\n\nhttps://developers.wrike.com/api/v4/tasks/#modify-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Task",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPZDVXU",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPZDVXU"
+							]
+						},
+						"description": "Delete task by ID\n\nhttps://developers.wrike.com/api/v4/tasks/#delete-tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tasks Fields History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKRAJXB7L/tasks_history?fields=[actualFees,actualCost,plannedFees,plannedCost]&updatedDate={\"start\":\"2023-01-01T07:00:00Z\",\"end\":\"2023-02-01T07:00:00Z\"}",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKRAJXB7L",
+								"tasks_history"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[actualFees,actualCost,plannedFees,plannedCost]"
+								},
+								{
+									"key": "updatedDate",
+									"value": "{\"start\":\"2023-01-01T07:00:00Z\",\"end\":\"2023-02-01T07:00:00Z\"}"
+								}
+							]
+						},
+						"description": "Get task information by ID\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Comments",
+			"item": [
+				{
+					"name": "Get Comments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/comments",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"comments"
+							]
+						},
+						"description": "Get all comments on all items shared with you\n\nhttps://developers.wrike.com/api/v4/comments/#get-comments"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Comments on Folder or Project",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYHGQ/comments?plainText",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYHGQ",
+								"comments"
+							],
+							"query": [
+								{
+									"key": "plainText",
+									"value": null,
+									"description": "Optional\n"
+								}
+							]
+						},
+						"description": "Get all comments on a specific folder or project\n\nhttps://developers.wrike.com/api/v4/comments/#get-comments"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Comments on Task",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQTCIRDY/comments?plainText",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQTCIRDY",
+								"comments"
+							],
+							"query": [
+								{
+									"key": "plainText",
+									"value": null
+								}
+							]
+						},
+						"description": "Get all on a specific task\n\nhttps://developers.wrike.com/api/v4/comments/#get-comments"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Multiple Comments by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/comments/IEACW7SVIMJUJRHT,IEACW7SVIMJRT2RU",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"comments",
+								"IEACW7SVIMJUJRHT,IEACW7SVIMJRT2RU"
+							]
+						},
+						"description": "Get one or more comments\n\nhttps://developers.wrike.com/api/v4/comments/#get-comments"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Comments on Folder or Project",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYHGQ/comments?text=This is a new comment <b>with></b> HTML formatting&plainText=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYHGQ",
+								"comments"
+							],
+							"query": [
+								{
+									"key": "text",
+									"value": "This is a new comment <b>with></b> HTML formatting"
+								},
+								{
+									"key": "plainText",
+									"value": "false"
+								}
+							]
+						},
+						"description": "Create a comment on a folder or project\n\nhttps://developers.wrike.com/api/v4/comments/#create-comment"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Comments on Task",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPX4WGU/comments?text=This is a new comment <b>with></b> HTML formatting&plainText=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPX4WGU",
+								"comments"
+							],
+							"query": [
+								{
+									"key": "text",
+									"value": "This is a new comment <b>with></b> HTML formatting",
+									"description": "Required"
+								},
+								{
+									"key": "plainText",
+									"value": "false",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Create a comment on a task\n\nhttps://developers.wrike.com/api/v4/comments/#create-comment"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Comments on Task with mention",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPX4WGU/comments?text=This is a new comment <b>to</b> <a class=\"stream-user-id avatar\" rel=\"KUAFY3BJ\">@John Doe</a>&plainText=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPX4WGU",
+								"comments"
+							],
+							"query": [
+								{
+									"key": "text",
+									"value": "This is a new comment <b>to</b> <a class=\"stream-user-id avatar\" rel=\"KUAFY3BJ\">@John Doe</a>",
+									"description": "Required"
+								},
+								{
+									"key": "plainText",
+									"value": "false",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Create a comment on a task with @mention\n\nhttps://developers.wrike.com/api/v4/comments/#create-comment"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Comment by ID",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/comments/IEACW7SVIMJVSFUF?text=This is a new comment <b>to</b> <a class=\"stream-user-id avatar\" rel=\"KUAFY3BJ\">@John Dole</a>&plainText=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"comments",
+								"IEACW7SVIMJVSFUF"
+							],
+							"query": [
+								{
+									"key": "text",
+									"value": "This is a new comment <b>to</b> <a class=\"stream-user-id avatar\" rel=\"KUAFY3BJ\">@John Dole</a>",
+									"description": "Required"
+								},
+								{
+									"key": "plainText",
+									"value": "false",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Update a specific comment\n\nhttps://developers.wrike.com/api/v4/comments/#update-comment"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Comment",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/comments/IEACW7SVIMJVSFUF",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"comments",
+								"IEACW7SVIMJVSFUF"
+							]
+						},
+						"description": "Update a specific comment\n\nhttps://developers.wrike.com/api/v4/comments/#delete-comment"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dependencies",
+			"item": [
+				{
+					"name": "Query Task Dependencies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPZDTPF/dependencies",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPZDTPF",
+								"dependencies"
+							]
+						},
+						"description": "Get all dependencies for a specific task\n\nhttps://developers.wrike.com/api/v4/dependencies/#query-dependencies"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Dependency Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/dependencies/IEACW7SVIUPZDTPFKMPZEWKI,IEACW7SVIUPZEV3BKMPZDTPF",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"dependencies",
+								"IEACW7SVIUPZDTPFKMPZEWKI,IEACW7SVIUPZEV3BKMPZDTPF"
+							]
+						},
+						"description": "Get details for up to 100 dependencies\n\nhttps://developers.wrike.com/api/v4/dependencies/#query-dependencies"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Dependency",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPZDTPF/dependencies?successorId=IEACW7SVKQPZEWKI&relationType=FinishToStart",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPZDTPF",
+								"dependencies"
+							],
+							"query": [
+								{
+									"key": "predecessorId",
+									"value": null,
+									"description": "Required (Only one of predecessorId or successorId can be used)",
+									"disabled": true
+								},
+								{
+									"key": "successorId",
+									"value": "IEACW7SVKQPZEWKI",
+									"description": "Required (Only one of predecessorId or successorId can be used)"
+								},
+								{
+									"key": "relationType",
+									"value": "FinishToStart",
+									"description": "Required"
+								}
+							]
+						},
+						"description": "Create a new dependency on a task\n\nProvide relationType and one of predecessorId or successorId\n\nhttps://developers.wrike.com/api/v4/dependencies/#create-dependency"
+					},
+					"response": []
+				},
+				{
+					"name": "Modify Dependency",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/dependencies/IEACW7SVIUPZDTPFKMPZEWKI?relationType=FinishToFinish",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"dependencies",
+								"IEACW7SVIUPZDTPFKMPZEWKI"
+							],
+							"query": [
+								{
+									"key": "relationType",
+									"value": "FinishToFinish",
+									"description": "Required"
+								}
+							]
+						},
+						"description": "Modify a specific dependency and change the relationType\n\nhttps://developers.wrike.com/api/v4/dependencies/#modify-dependency"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Dependency",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/dependencies/IEACW7SVIUPZDTPFKMPZEWKI",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"dependencies",
+								"IEACW7SVIUPZDTPFKMPZEWKI"
+							]
+						},
+						"description": "Delete a dependency\n\nhttps://developers.wrike.com/api/v4/dependencies/#delete-dependency"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Timelogs",
+			"item": [
+				{
+					"name": "Query Timelog",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/timelogs",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"timelogs"
+							]
+						},
+						"description": "Get all timelogs \n* shared with authenticated user (no further changes)\n* for specific user (add /contacts/<contactid>) - see example below\n* in specific folder (add /folders/<folderid>)\n* in specific task (add /tasks/<taskid>)\n* for a specific timelog category (add /timelog_categories/<timelog_category_id>) - see example below\n\nYou can filter on billingType of you have Wrike Resource and add billingType to the return result by adding \"fields = [billingType]\"\n\nIf you want to get the timelogs for the current authenticated user, simply replace the contact ID with me - similar to the Query Contacts method\n\nhttps://developers.wrike.com/api/v4/timelogs/#query-timelogs"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Timelog for Contact",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/contacts/KUAFY3BJ/timelogs?trackedDate={\"start\":\"2020-04-01\",\"end\":\"2020-04-30\"}",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"contacts",
+								"KUAFY3BJ",
+								"timelogs"
+							],
+							"query": [
+								{
+									"key": "trackedDate",
+									"value": "{\"start\":\"2020-04-01\",\"end\":\"2020-04-30\"}"
+								}
+							]
+						},
+						"description": "Get all timelogs for a specific Contact (user)\n\nYou can filter on billingType of you have Wrike Resource and add billingType to the return result by adding \"fields = [billingType]\"\n\nIf you want to get the timelogs for the current authenticated user, simply replace the contact ID with me - similar to the Query Contacts method\n\nhttps://developers.wrike.com/api/v4/timelogs/#query-timelogs"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Timelog by Timelog Category",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/timelog_categories/IEACW7SVOQAADXMX/timelogs?trackedDate={\"start\":\"2020-04-01\",\"end\":\"2020-04-30\"}",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"timelog_categories",
+								"IEACW7SVOQAADXMX",
+								"timelogs"
+							],
+							"query": [
+								{
+									"key": "trackedDate",
+									"value": "{\"start\":\"2020-04-01\",\"end\":\"2020-04-30\"}"
+								}
+							]
+						},
+						"description": "Get all timelogs \n* shared with authenticated user (no further changes)\n* for specific user (see next example)\n* in specific folder (add /folders/<folderid>)\n* in specific task (add /tasks/<taskid>)\n\nYou can filter on billingType of you have Wrike Resource and add billingType to the return result by adding \"fields = [billingType]\"\n\nIf you want to get the timelogs for the current authenticated user, simply replace the contact ID with me - similar to the Query Contacts method\n\nhttps://developers.wrike.com/api/v4/timelogs/#query-timelogs"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Timelog for Task by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPX4WGU/timelogs?fields=[billingType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPX4WGU",
+								"timelogs"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[billingType]"
+								}
+							]
+						},
+						"description": "Get all timelogs for Task\n\nhttps://developers.wrike.com/api/v4/timelogs/#query-timelogs"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Timelog for Task by ID where export status is ReadyForExport (WR)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPX4WGU/timelogs?fields=[exportStatus,billingType]&exportStatuses=[\"ReadyForExport\"]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPX4WGU",
+								"timelogs"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[exportStatus,billingType]"
+								},
+								{
+									"key": "exportStatuses",
+									"value": "[\"ReadyForExport\"]"
+								}
+							]
+						},
+						"description": "Get all timelogs for Task where [exportStatus] is [ReadyForExport]\n\nThis is only supported if you have Wrike Resource\n\nhttps://developers.wrike.com/api/v4/timelogs/#query-timelogs"
+					},
+					"response": []
+				},
+				{
+					"name": "Query Timelog for Task by ID (WR)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPX4WGU/timelogs?fields=[exportStatus,billingType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPX4WGU",
+								"timelogs"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[exportStatus,billingType]"
+								}
+							]
+						},
+						"description": "Get all timelogs for Task and include [exportStatus]\n\nThis is only supported if you have Wrike Resource\n\nhttps://developers.wrike.com/api/v4/timelogs/#query-timelogs"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Timelog",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPX4WGU/timelogs?comment=Worked on HDL&hours=2.0&trackedDate=2020-07-02&plainText=true&categoryId=IEACW7SVOQAADXMX&fields=[billingType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPX4WGU",
+								"timelogs"
+							],
+							"query": [
+								{
+									"key": "comment",
+									"value": "Worked on HDL",
+									"description": "Required"
+								},
+								{
+									"key": "hours",
+									"value": "2.0",
+									"description": "Required"
+								},
+								{
+									"key": "trackedDate",
+									"value": "2020-07-02",
+									"description": "Required"
+								},
+								{
+									"key": "plainText",
+									"value": "true",
+									"description": "Optional"
+								},
+								{
+									"key": "categoryId",
+									"value": "IEACW7SVOQAADXMX",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[billingType]",
+									"description": "Optional (Wrike Resource Only)"
+								}
+							]
+						},
+						"description": "Create a new timelog entry on a task\n\nIf you have Wrike Resource, you can add billingType to the result set. See below\n\nYou can only create timelog entries for the currently authenticated user\n\nhttps://developers.wrike.com/api/v4/timelogs/#modify-timelog"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Export Status of Timelog Entry (WR)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/timelogs/IEACW7SVJQAFOXYV?exportStatus=Exported&fields=[exportStatus,billingType]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"timelogs",
+								"IEACW7SVJQAFOXYV"
+							],
+							"query": [
+								{
+									"key": "exportStatus",
+									"value": "Exported"
+								},
+								{
+									"key": "fields",
+									"value": "[exportStatus,billingType]"
+								}
+							]
+						},
+						"description": "Update the export status of a timelog entry\n\nThis is only supported if you have Wrike Resource\n\nhttps://developers.wrike.com/api/v4/timelogs/#modify-timelog"
+					},
+					"response": []
+				},
+				{
+					"name": "Update number of hours of Timelog Entry",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/timelogs/IEACW7SVJQAFOXYV?hours=2.0",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"timelogs",
+								"IEACW7SVJQAFOXYV"
+							],
+							"query": [
+								{
+									"key": "hours",
+									"value": "2.0"
+								}
+							]
+						},
+						"description": "Update the reported number of hours of a timelog entry\n\nhttps://developers.wrike.com/api/v4/timelogs/#modify-timelog"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Timelog",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/timelogs/IEACW7SVJQAFPLOW",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"timelogs",
+								"IEACW7SVJQAFPLOW"
+							]
+						},
+						"description": "Delete a timelog entry\n\nhttps://developers.wrike.com/api/v4/timelogs/#delete-timelog"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Timelog Categories",
+			"item": [
+				{
+					"name": "Query TImelog Categories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/timelog_categories",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"timelog_categories"
+							]
+						},
+						"description": "Get a list of all timelog categories\n\nhttps://developers.wrike.com/api/v4/timelog-categories/#query-timelog-categories"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Attachments",
+			"item": [
+				{
+					"name": "Get Attachments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/attachments?versions=true&createdDate={\"start\":\"2020-07-01T00:00:00Z\",\"end\":\"2020-07-02T07:53:33Z\"}&withUrls=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"attachments"
+							],
+							"query": [
+								{
+									"key": "versions",
+									"value": "true",
+									"description": "Optional"
+								},
+								{
+									"key": "createdDate",
+									"value": "{\"start\":\"2020-07-01T00:00:00Z\",\"end\":\"2020-07-02T07:53:33Z\"}",
+									"description": "Optional"
+								},
+								{
+									"key": "withUrls",
+									"value": "true",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Get all attachments\n\nhttps://developers.wrike.com/api/v4/attachments/#get-attachments"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Attachments on Folder or Project",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PZXTGO/attachments",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PZXTGO",
+								"attachments"
+							]
+						},
+						"description": "Get all attachments on a folder or project\n\nhttps://developers.wrike.com/api/v4/attachments/#get-attachments"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Attachments on Task",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQOKD5EG/attachments",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQOKD5EG",
+								"attachments"
+							]
+						},
+						"description": "Get all attachments on a Task\n\nhttps://developers.wrike.com/api/v4/attachments/#get-attachments"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Attachments details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/attachments/IEACW7SVIYEV4HBN",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"attachments",
+								"IEACW7SVIYEV4HBN"
+							]
+						},
+						"description": "Get details of one or more attachments\n\nFor more attachments add comma separated list. Up to 100 IDs\n\nhttps://developers.wrike.com/api/v4/attachments/#get-attachments"
+					},
+					"response": []
+				},
+				{
+					"name": "Download Wrike Attachment",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/attachments/IEACW7SVIYJJEUHD/download/Lorem Ipsum.docx",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"attachments",
+								"IEACW7SVIYJJEUHD",
+								"download",
+								"Lorem Ipsum.docx"
+							]
+						},
+						"description": "Download the attachment content. \n\nIn this example the contant will be downloaded with \"Lorem Ipsum.docx\" as the name of the file\n\nhttps://developers.wrike.com/api/v4/attachments/#get-attachments"
+					},
+					"response": []
+				},
+				{
+					"name": "Download Wrike Attachment Preview",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/attachments/IEACW7SVIYJJEUHD/preview",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"attachments",
+								"IEACW7SVIYJJEUHD",
+								"preview"
+							],
+							"query": [
+								{
+									"key": "size",
+									"value": "w300",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Download the attachment preview. \n\nThe example will be created as Content-Type 'image/png' and filename will be set as screenshot.jpeg\n\nThe preview will be 300px wide and hight will be auto\n\nhttps://developers.wrike.com/api/v4/attachments/#download-attachment-preview"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Access URL for Attachment",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/attachments/IEACW7SVIYJJEUHD/url",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"attachments",
+								"IEACW7SVIYJJEUHD",
+								"url"
+							]
+						},
+						"description": "Get the access url that can be used to download the attachment\n\nhttps://developers.wrike.com/api/v4/attachments/#get-access-url-for-attachment"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Wrike Attachment on Task",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPX4WGU/attachments",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPX4WGU",
+								"attachments"
+							]
+						},
+						"description": "Create a new attachment on a Wrike task\n\nhttps://developers.wrike.com/api/v4/attachments/#create-wrike-attachment"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Wrike Attachment on Folder or Project",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYHGQ/attachments",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYHGQ",
+								"attachments"
+							]
+						},
+						"description": "Create a new attachment on a Wrike folder or project\n\nhttps://developers.wrike.com/api/v4/attachments/#create-wrike-attachment"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Attachment",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/attachments/IEACW7SVIYETHGA5",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"attachments",
+								"IEACW7SVIYETHGA5"
+							]
+						},
+						"description": "Update an existing Wrike attachment with a new version\n\nhttps://developers.wrike.com/api/v4/attachments/#update-attachment"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Attachment",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/attachments/IEACW7SVIYETHGA5",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"attachments",
+								"IEACW7SVIYETHGA5"
+							]
+						},
+						"description": "Delete an existing Wrike attachment\n\nBe aware, the attachment **cannot** be recovered from the recycle bin. \n\n\nhttps://developers.wrike.com/api/v4/attachments/#delete-attachment"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Versions",
+			"item": [
+				{
+					"name": "API Version",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/version",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"version"
+							]
+						},
+						"description": "Get the current API Version of the API\n\nhttps://developers.wrike.com/api/v4/version/#api-version"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "IDs",
+			"item": [
+				{
+					"name": "Legacy API V2 Converter",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/ids?type=ApiV2Folder&ids=[344739029]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"ids"
+							],
+							"query": [
+								{
+									"key": "type",
+									"value": "ApiV2Folder",
+									"description": "Required"
+								},
+								{
+									"key": "ids",
+									"value": "[344739029]",
+									"description": "Required"
+								}
+							]
+						},
+						"description": "Convert the V2 IDs used in the UI to the V4 IDs used by the API\n\nChange the type to match the type of object you are looking to comverts. You can convert multiple IDs by providing a comma separated list of IDs\n\nhttps://developers.wrike.com/api/v4/ids/#legacy-api-v2-ids-converter"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Colors",
+			"item": [
+				{
+					"name": "Query Color",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/colors",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"colors"
+							]
+						},
+						"description": "Get the color name - code mapping\n\nhttps://developers.wrike.com/api/v4/colors/#query-colors"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Spaces",
+			"item": [
+				{
+					"name": "Get Spaces",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/spaces?withArchived=false&userIsMember=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"spaces"
+							],
+							"query": [
+								{
+									"key": "withArchived",
+									"value": "false",
+									"description": "Optional"
+								},
+								{
+									"key": "userIsMember",
+									"value": "false",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[members]",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get a list of all spaces visible to the authenticated user\n\nhttps://developers.wrike.com/api/v4/spaces/#get-spaces"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Space by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/spaces/IEACW7SVI4XDCUZX",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"spaces",
+								"IEACW7SVI4XDCUZX"
+							]
+						},
+						"description": "Get Space information by Space ID   \n\nhttps://developers.wrike.com/api/v4/spaces/#get-space"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Space",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/spaces?accessType=Public&title=MyTeam&members=[{\"id\":\"KUAFY3BJ\",\"accessRoleId\":\"IEACW7SVND777777\",\"isManager\":\"true\"}]&fields=[members]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"spaces"
+							],
+							"query": [
+								{
+									"key": "accessType",
+									"value": "Public",
+									"description": "Required"
+								},
+								{
+									"key": "title",
+									"value": "MyTeam",
+									"description": "Required"
+								},
+								{
+									"key": "members",
+									"value": "[{\"id\":\"KUAFY3BJ\",\"accessRoleId\":\"IEACW7SVND777777\",\"isManager\":\"true\"}]",
+									"description": "Optional"
+								},
+								{
+									"key": "guestRoleId",
+									"value": null,
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "fields",
+									"value": "[members]"
+								}
+							]
+						},
+						"description": "Get Space information by Space ID   \n\nhttps://developers.wrike.com/api/v4/spaces/#get-space"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Space",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/spaces/IEACW7SVI4PZW7GW?accessType=Public&title=MyTeam&membersAdd=[{\"id\":\"KUAHPAGA\",\"accessRoleId\":\"IEACW7SVND777777\",\"isManager\":\"true\"}]&guestRoleId=IEACW7SVND777777&fields=[members]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"spaces",
+								"IEACW7SVI4PZW7GW"
+							],
+							"query": [
+								{
+									"key": "accessType",
+									"value": "Public",
+									"description": "Required"
+								},
+								{
+									"key": "title",
+									"value": "MyTeam",
+									"description": "Required"
+								},
+								{
+									"key": "membersAdd",
+									"value": "[{\"id\":\"KUAHPAGA\",\"accessRoleId\":\"IEACW7SVND777777\",\"isManager\":\"true\"}]",
+									"description": "Optional"
+								},
+								{
+									"key": "membersUpdate",
+									"value": "[{\"id\":\"KUAFY3BJ\",\"accessRoleId\":\"IEACW7SVND777777\",\"isManager\":\"true\"}]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "membersRemove",
+									"value": "[{\"id\":\"KUAFY3BJ\",\"accessRoleId\":\"IEACW7SVND777777\",\"isManager\":\"true\"}]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "guestRoleId",
+									"value": "IEACW7SVND777777",
+									"description": "Optional"
+								},
+								{
+									"key": "fields",
+									"value": "[members]"
+								}
+							]
+						},
+						"description": "Update a specific Space\n\nhttps://developers.wrike.com/api/v4/spaces/#update-space"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Space",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/spaces/IIEAEGKGBI4S3CCZW",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"spaces",
+								"IIEAEGKGBI4S3CCZW"
+							],
+							"query": [
+								{
+									"key": "membersUpdate",
+									"value": "[{\"id\":\"KUAFY3BJ\",\"accessRoleId\":\"IEACW7SVND777777\",\"isManager\":\"true\"}]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "membersRemove",
+									"value": "[{\"id\":\"KUAFY3BJ\",\"accessRoleId\":\"IEACW7SVND777777\",\"isManager\":\"true\"}]",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Update a specific Space\n\nhttps://developers.wrike.com/api/v4/spaces/#update-space"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Data Export",
+			"item": [
+				{
+					"name": "Get Data Export",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/data_export",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"data_export"
+							]
+						},
+						"description": "Get the last completed Data Export\n\nhttps://developers.wrike.com/api/v4/data-export/#get-data-export"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Data Export by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/data_export/IEACW7SVMUAARYQS",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"data_export",
+								"IEACW7SVMUAARYQS"
+							]
+						},
+						"description": "Get a specific Data Export\n\nhttps://developers.wrike.com/api/v4/data-export/#get-data-export"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Data Export",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/data_export",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"data_export"
+							]
+						},
+						"description": "Force a new data export generation (if it is not in progress already). \n* 202 code is returned in case new export generation is started. \n* Data export can be requested no sooner than 1 hour after last successful data export. \n* If there is fresh data export already, 200 code and latest export in format similar to [GET] /data_export is returned.\n\n(https://developers.wrike.com/api/v4/data-export/#refresh-data-export)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Data Export Schema",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/data_export_schema?version=V1",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"data_export_schema"
+							],
+							"query": [
+								{
+									"key": "version",
+									"value": "V1",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Get data export schema specified by version.\n\n(https://developers.wrike.com/api/v4/data-export/#get-data-export-schema)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Audit Logs",
+			"item": [
+				{
+					"name": "Get Audit Log",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": ""
+						},
+						"description": "Get [Audit Log Reports](https://help.wrike.com/hc/en-us/articles/209606309-Audit-Log-Reports), that contains audit trail for actions in the account. Available to Enterprise admins with \"Create user activity reports\" right.\n\n(https://developers.wrike.com/api/v4/audit-log/#get-audit-log)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Access Roles",
+			"item": [
+				{
+					"name": "Get Access Roles",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/access_roles",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"access_roles"
+							]
+						},
+						"description": "Get a list of all access roles\n\n(https://developers.wrike.com/api/v4/access-roles/#get-access-roles)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Async Jobs",
+			"item": [
+				{
+					"name": "Get Async Job Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/async_job/IEACW7SVNJLDMMK2NZBFUSA",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"async_job",
+								"IEACW7SVNJLDMMK2NZBFUSA"
+							]
+						},
+						"description": "Get the status of an asynchronos job\n\nStatus can be one of [InQueue, InProgress, Completed, Failed]\n\nhttps://developers.wrike.com/api/v4/async-job/#get-async-job"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Approvals",
+			"item": [
+				{
+					"name": "Get Approvals",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/approvals?statuses=[Pending]&updatedDate={\"start\":\"2020-01-01T00:00:00Z\",\"end\":\"2020-07-03T00:00:00Z\"}&approvers=[KUAFY3BJ]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"approvals"
+							],
+							"query": [
+								{
+									"key": "statuses",
+									"value": "[Pending]",
+									"description": "Optional"
+								},
+								{
+									"key": "updatedDate",
+									"value": "{\"start\":\"2020-01-01T00:00:00Z\",\"end\":\"2020-07-03T00:00:00Z\"}"
+								},
+								{
+									"key": "approvers",
+									"value": "[KUAFY3BJ]",
+									"description": "Optional"
+								},
+								{
+									"key": "pendingApprovers",
+									"value": "[]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "pageSize",
+									"value": "100",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "nextPageToken",
+									"value": null,
+									"disabled": true
+								}
+							]
+						},
+						"description": "Reads approvals by filter. When no filter parameters passed returns all approvals shared with a user.\n\n(https://developers.wrike.com/api/v4/approvals/#get-approvals)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Approvals by Folder or Project",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PZXTGO/approvals",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PZXTGO",
+								"approvals"
+							]
+						},
+						"description": "Reads all approvals on folder/project.\n\n(https://developers.wrike.com/api/v4/approvals/#get-approvals)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Approvals by Task",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPZXU7M/approvals",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPZXU7M",
+								"approvals"
+							]
+						},
+						"description": "Reads all approvals on task.\n\n(https://developers.wrike.com/api/v4/approvals/#get-approvals)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Approvals by Ids",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/approvals/IEACW7SVMEABQDRJ,IEACW7SVMEABQDBW,IEACW7SVMEABR26X",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"approvals",
+								"IEACW7SVMEABQDRJ,IEACW7SVMEABQDBW,IEACW7SVMEABR26X"
+							],
+							"query": [
+								{
+									"key": "pendingApprovers",
+									"value": "[]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "pageSize",
+									"value": "100",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "nextPageToken",
+									"value": null,
+									"disabled": true
+								}
+							]
+						},
+						"description": "Reads approvals by ids.\n\n(https://developers.wrike.com/api/v4/approvals/#get-approvals)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Approvals on Folder or Project",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4PZXTGO/approvals?description=Project Approval&dueDate=2020-07-05&approvers=[KUAFY3BJ]&attachments=[IEACW7SVIYETHV3S]&autoFinishOnApprove=true&autoFinishOnReject=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4PZXTGO",
+								"approvals"
+							],
+							"query": [
+								{
+									"key": "description",
+									"value": "Project Approval",
+									"description": "Optional"
+								},
+								{
+									"key": "dueDate",
+									"value": "2020-07-05",
+									"description": "Optional"
+								},
+								{
+									"key": "approvers",
+									"value": "[KUAFY3BJ]",
+									"description": "Optional"
+								},
+								{
+									"key": "attachments",
+									"value": "[IEACW7SVIYETHV3S]",
+									"description": "Optional"
+								},
+								{
+									"key": "autoFinishOnApprove",
+									"value": "true",
+									"description": "Optional"
+								},
+								{
+									"key": "autoFinishOnReject",
+									"value": "true",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Create an approval for folder/project. Creates approval in draft status when no approvers assigned. Otherwise creates in pending status. Approvals created via API will not be affected by workflow automation, e.g. task status will not be automatically transitioned when approval finishes.\n\n(https://developers.wrike.com/api/v4/approvals/#create-approval)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Approvals on Task",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEACW7SVKQPZXU7M/approvals?description=Project Approval&dueDate=2020-07-05&approvers=[KUAFY3BJ]&attachments=[IEACW7SVIYETHWC7]&autoFinishOnApprove=true&autoFinishOnReject=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEACW7SVKQPZXU7M",
+								"approvals"
+							],
+							"query": [
+								{
+									"key": "description",
+									"value": "Project Approval",
+									"description": "Optional"
+								},
+								{
+									"key": "dueDate",
+									"value": "2020-07-05",
+									"description": "Optional"
+								},
+								{
+									"key": "approvers",
+									"value": "[KUAFY3BJ]",
+									"description": "Optional"
+								},
+								{
+									"key": "attachments",
+									"value": "[IEACW7SVIYETHWC7]",
+									"description": "Optional"
+								},
+								{
+									"key": "autoFinishOnApprove",
+									"value": "true",
+									"description": "Optional"
+								},
+								{
+									"key": "autoFinishOnReject",
+									"value": "true",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Create an approval for task. Creates approval in draft status when no approvers assigned. Otherwise creates in pending status. Approvals created via API will not be affected by workflow automation, e.g. task status will not be automatically transitioned when approval finishes.\n\n(https://developers.wrike.com/api/v4/approvals/#create-approval)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Approval",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/approvals/IEACW7SVMEABR3CQ?dueDate=2020-07-06&removeApprovers=[KUAGQUTS]&addAttachments=[IEACW7SVIYETHV3S]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"approvals",
+								"IEACW7SVMEABR3CQ"
+							],
+							"query": [
+								{
+									"key": "description",
+									"value": "New Project Approval",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "dueDate",
+									"value": "2020-07-06",
+									"description": "Optional"
+								},
+								{
+									"key": "addApprovers",
+									"value": "[KUAGQUTS]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "removeApprovers",
+									"value": "[KUAGQUTS]",
+									"description": "Optional"
+								},
+								{
+									"key": "addAttachments",
+									"value": "[IEACW7SVIYETHV3S]",
+									"description": "Optional"
+								},
+								{
+									"key": "removeAttachments",
+									"value": "[IEACW7SVIYETHV3S]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "autoFinishOnApprove",
+									"value": "true",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "autoFinishOnReject",
+									"value": "true",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Update a pending approval\n\n(https://developers.wrike.com/api/v4/approvals/#update-approval)"
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Approval",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/approvals/IEACW7SVMEABR3AI",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"approvals",
+								"IEACW7SVMEABR3AI"
+							],
+							"query": [
+								{
+									"key": "dueDate",
+									"value": "2020-07-05",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "addApprovers",
+									"value": "[KUAGQUTS]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "removeApprovers",
+									"value": "[]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "addAttachments",
+									"value": "[IEACW7SVIYETHV3S]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "removeAttachments",
+									"value": "[IEACW7SVIYETHV3S]",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "autoFinishOnApprove",
+									"value": "true",
+									"description": "Optional",
+									"disabled": true
+								},
+								{
+									"key": "autoFinishOnReject",
+									"value": "true",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Cancel a pending approval\n\n(https://developers.wrike.com/api/v4/approvals/#cancel-approval)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Work Schedules",
+			"item": [
+				{
+					"name": "Get Workschedules",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedules?fields=[userIds]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedules"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[userIds]"
+								}
+							]
+						},
+						"description": "Returns list of all work schedules in account.\n\n(https://developers.wrike.com/api/v4/work-schedules/#query-work-schedules)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Workschedule by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedules/IEACW7SVMIACBR5S?fields=[userIds]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedules",
+								"IEACW7SVMIACBR5S"
+							],
+							"query": [
+								{
+									"key": "fields",
+									"value": "[userIds]"
+								}
+							]
+						},
+						"description": "Get work schedule by ID\n\n(https://developers.wrike.com/api/v4/work-schedules/#query-work-schedules)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Workschedule",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedules?title=Friday and Saturday off&workweek=[{\"dayOfWeek\":\"Sun\",\"isWorkDay\":true},{\"dayOfWeek\":\"Mon\",\"isWorkDay\":true},{\"dayOfWeek\":\"Tue\",\"isWorkDay\":true},{\"dayOfWeek\":\"Wed\",\"isWorkDay\":true},{\"dayOfWeek\":\"Thu\",\"isWorkDay\":true},{\"dayOfWeek\":\"Fri\",\"isWorkDay\":false},{\"dayOfWeek\":\"Sat\",\"isWorkDay\":false}]&addUsers=[KUAGQUTS,KUAHUBHL]&fields=[userIds]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedules"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "Friday and Saturday off",
+									"description": "Required"
+								},
+								{
+									"key": "workweek",
+									"value": "[{\"dayOfWeek\":\"Sun\",\"isWorkDay\":true},{\"dayOfWeek\":\"Mon\",\"isWorkDay\":true},{\"dayOfWeek\":\"Tue\",\"isWorkDay\":true},{\"dayOfWeek\":\"Wed\",\"isWorkDay\":true},{\"dayOfWeek\":\"Thu\",\"isWorkDay\":true},{\"dayOfWeek\":\"Fri\",\"isWorkDay\":false},{\"dayOfWeek\":\"Sat\",\"isWorkDay\":false}]"
+								},
+								{
+									"key": "addUsers",
+									"value": "[KUAGQUTS,KUAHUBHL]"
+								},
+								{
+									"key": "fields",
+									"value": "[userIds]"
+								}
+							]
+						},
+						"description": "Create a new workschedule\n\n(https://developers.wrike.com/api/v4/work-schedules/#create-work-schedule)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Workschedule",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedules/IEACW7SVMIACAO6L?title=Friday and Saturday Off&workweek=[{\"dayOfWeek\":\"Sun\",\"isWorkDay\":true},{\"dayOfWeek\":\"Mon\",\"isWorkDay\":true},{\"dayOfWeek\":\"Tue\",\"isWorkDay\":true},{\"dayOfWeek\":\"Wed\",\"isWorkDay\":true},{\"dayOfWeek\":\"Thu\",\"isWorkDay\":true},{\"dayOfWeek\":\"Fri\",\"isWorkDay\":false},{\"dayOfWeek\":\"Sat\",\"isWorkDay\":false}]&addUsers=[KUAFZQDP]&removeUsers=[KUAGQUTS]&fields=[userIds]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedules",
+								"IEACW7SVMIACAO6L"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "Friday and Saturday Off",
+									"description": "Required"
+								},
+								{
+									"key": "workweek",
+									"value": "[{\"dayOfWeek\":\"Sun\",\"isWorkDay\":true},{\"dayOfWeek\":\"Mon\",\"isWorkDay\":true},{\"dayOfWeek\":\"Tue\",\"isWorkDay\":true},{\"dayOfWeek\":\"Wed\",\"isWorkDay\":true},{\"dayOfWeek\":\"Thu\",\"isWorkDay\":true},{\"dayOfWeek\":\"Fri\",\"isWorkDay\":false},{\"dayOfWeek\":\"Sat\",\"isWorkDay\":false}]"
+								},
+								{
+									"key": "addUsers",
+									"value": "[KUAFZQDP]"
+								},
+								{
+									"key": "removeUsers",
+									"value": "[KUAGQUTS]"
+								},
+								{
+									"key": "fields",
+									"value": "[userIds]"
+								}
+							]
+						},
+						"description": "Update a workschedule by ID\n\n(https://developers.wrike.com/api/v4/work-schedules/#update-work-schedule)"
+					},
+					"response": []
+				},
+				{
+					"name": "Detele Workschedule",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedules/IEACW7SVMIACAO6L",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedules",
+								"IEACW7SVMIACAO6L"
+							]
+						},
+						"description": "Delete a workschedule by ID\n\n(https://developers.wrike.com/api/v4/work-schedules/#delete-work-schedule)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Copy Work Schedule",
+			"item": [
+				{
+					"name": "Copy Workschedule",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedules/IEACW7SVMIACBR5S/duplicate?title=Extended Schedule",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedules",
+								"IEACW7SVMIACBR5S",
+								"duplicate"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "Extended Schedule"
+								}
+							]
+						},
+						"description": "Update a workschedule by ID\n\n(https://developers.wrike.com/api/v4/work-schedules/#update-work-schedule)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Work Schedule Exceptions",
+			"item": [
+				{
+					"name": "Get Work Schedule Exceptions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedule_exclusions/IEACW7SVMQAABGTC",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedule_exclusions",
+								"IEACW7SVMQAABGTC"
+							]
+						},
+						"description": "Get a specific work schedule exclusion\n\n(https://developers.wrike.com/api/v4/work-schedule-exceptions/#query-work-schedule-exceptions)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Work Schedule Exceptions by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedules/IEACW7SVMIACAOHL/workschedule_exclusions",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedules",
+								"IEACW7SVMIACAOHL",
+								"workschedule_exclusions"
+							]
+						},
+						"description": "Get all exceptions created on a specific workschedule\n\n(https://developers.wrike.com/api/v4/work-schedule-exceptions/#query-work-schedule-exceptions)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Work Schedule Exception",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedules/IEACW7SVMIACAOHL/workschedule_exclusions?fromDate=2020-08-20&toDate=2020-08-21&exclusionType=OtherEvent",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedules",
+								"IEACW7SVMIACAOHL",
+								"workschedule_exclusions"
+							],
+							"query": [
+								{
+									"key": "fromDate",
+									"value": "2020-08-20",
+									"description": "Required"
+								},
+								{
+									"key": "toDate",
+									"value": "2020-08-21",
+									"description": "Required"
+								},
+								{
+									"key": "exclusionType",
+									"value": "OtherEvent",
+									"description": "Required"
+								}
+							]
+						},
+						"description": "Create a new work schedule exclusion on a work schedule\n\n(https://developers.wrike.com/api/v4/work-schedule-exceptions/#create-work-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Work Schedule Exception",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedule_exclusions/IEACW7SVMQAABGTD?fromDate=2020-08-20&toDate=2020-08-23&exclusionType=OtherEvent",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedule_exclusions",
+								"IEACW7SVMQAABGTD"
+							],
+							"query": [
+								{
+									"key": "fromDate",
+									"value": "2020-08-20",
+									"description": "Required"
+								},
+								{
+									"key": "toDate",
+									"value": "2020-08-23",
+									"description": "Required"
+								},
+								{
+									"key": "exclusionType",
+									"value": "OtherEvent",
+									"description": "Required"
+								}
+							]
+						},
+						"description": "Update a work schedule exclusion on a work schedule\n\n(https://developers.wrike.com/api/v4/work-schedule-exceptions/#update-work-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Work Schedule Exception",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/workschedule_exclusions/IEACW7SVMQAABGTD",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"workschedule_exclusions",
+								"IEACW7SVMQAABGTD"
+							]
+						},
+						"description": "Delete a work schedule exclusion  by ID\n\n(https://developers.wrike.com/api/v4/work-schedule-exceptions/#delete-work-schedule-exception)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User Schedule Exceptions",
+			"item": [
+				{
+					"name": "Get User Schedule Exceptions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/user_schedule_exclusions?dateRange={\"start\":\"2020-01-01\",\"end\":\"2020-12-31\"}&userIds=[KUAHUBHL]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"user_schedule_exclusions"
+							],
+							"query": [
+								{
+									"key": "dateRange",
+									"value": "{\"start\":\"2020-01-01\",\"end\":\"2020-12-31\"}",
+									"description": "Optional"
+								},
+								{
+									"key": "userIds",
+									"value": "[KUAHUBHL]",
+									"description": "Optional"
+								}
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Schedule Exception by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/user_schedule_exclusions/IEACW7SVMYAADPDY",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"user_schedule_exclusions",
+								"IEACW7SVMYAADPDY"
+							]
+						},
+						"description": "Get a user level work schedule exclusions by ID\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create User Schedule Exception",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/user_schedule_exclusions?userId=KUAHUBHL&fromDate=2020-09-07&toDate=2020-09-11&exclusionType=VacationPTO",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"user_schedule_exclusions"
+							],
+							"query": [
+								{
+									"key": "userId",
+									"value": "KUAHUBHL",
+									"description": "Required"
+								},
+								{
+									"key": "fromDate",
+									"value": "2020-09-07",
+									"description": "Required"
+								},
+								{
+									"key": "toDate",
+									"value": "2020-09-11",
+									"description": "Required"
+								},
+								{
+									"key": "exclusionType",
+									"value": "VacationPTO",
+									"description": "Required"
+								}
+							]
+						},
+						"description": "Create a user level work schedule exclusion\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#create-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Schedule Exception",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/user_schedule_exclusions/IEACW7SVMYAADPDZ?fromDate=2020-08-19&toDate=2020-08-23&exclusionType=VacationPTO",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"user_schedule_exclusions",
+								"IEACW7SVMYAADPDZ"
+							],
+							"query": [
+								{
+									"key": "fromDate",
+									"value": "2020-08-19"
+								},
+								{
+									"key": "toDate",
+									"value": "2020-08-23"
+								},
+								{
+									"key": "exclusionType",
+									"value": "VacationPTO"
+								}
+							]
+						},
+						"description": "Update user level work schedule exclusion by ID\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#update-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User Schedule Exception",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/user_schedule_exclusions/IEACW7SVMYAADPDZ",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"user_schedule_exclusions",
+								"IEACW7SVMYAADPDZ"
+							]
+						},
+						"description": "Delete user level work schedule exclusion by ID\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#delete-user-schedule-exception)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Bookings",
+			"item": [
+				{
+					"name": "Get Bookings by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/bookings/IEACW7SVNYAAG7FU",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"bookings",
+								"IEACW7SVNYAAG7FU"
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Bookings by Folder",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI5AHLW72/bookings?startDate=2023-01-01&finishDate=2023-04-01&responsiblePlaceholderIds=[IEACW7SVNMAAAWLP]&showDescendants=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI5AHLW72",
+								"bookings"
+							],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2023-01-01"
+								},
+								{
+									"key": "finishDate",
+									"value": "2023-04-01"
+								},
+								{
+									"key": "responsibleIds",
+									"value": null,
+									"disabled": true
+								},
+								{
+									"key": "responsiblePlaceholderIds",
+									"value": "[IEACW7SVNMAAAWLP]"
+								},
+								{
+									"key": "showDescendants",
+									"value": "false"
+								}
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Bookings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/bookings?startDate=2023-01-01&finishDate=2023-04-01&responsiblePlaceholderIds=[IEACW7SVNMAAAWLP]&showDescendants=false",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"bookings"
+							],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2023-01-01"
+								},
+								{
+									"key": "finishDate",
+									"value": "2023-04-01"
+								},
+								{
+									"key": "responsibleIds",
+									"value": null,
+									"disabled": true
+								},
+								{
+									"key": "responsiblePlaceholderIds",
+									"value": "[IEACW7SVNMAAAWLP]"
+								},
+								{
+									"key": "showDescendants",
+									"value": "false"
+								}
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Booking",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI5AHLW72/bookings?responsiblePlaceholderId=IEACW7SVNMAAAWLP&bookingDates={\"duration\":10,\"startDate\":\"2023-03-10\",\"workOnWeekends\":false}&effortAllocation={\"responsibleAllocation\":[{\"placeholderId\" : \"IEACW7SVNMAAAWLP\", \"dailyAllocation\" : [] } ], \"mode\":\"Basic\", \"totalEffort\":1200 }",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI5AHLW72",
+								"bookings"
+							],
+							"query": [
+								{
+									"key": "responsibleId",
+									"value": "",
+									"description": "optional",
+									"disabled": true
+								},
+								{
+									"key": "responsiblePlaceholderId",
+									"value": "IEACW7SVNMAAAWLP",
+									"description": "optional"
+								},
+								{
+									"key": "bookingDates",
+									"value": "{\"duration\":10,\"startDate\":\"2023-03-10\",\"workOnWeekends\":false}",
+									"description": "required"
+								},
+								{
+									"key": "effortAllocation",
+									"value": "{\"responsibleAllocation\":[{\"placeholderId\" : \"IEACW7SVNMAAAWLP\", \"dailyAllocation\" : [] } ], \"mode\":\"Basic\", \"totalEffort\":1200 }"
+								}
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Booking",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/bookings/IEACW7SVNYAAG7MO?responsiblePlaceholderId=IEACW7SVNMAAAWLP&bookingDates={\"duration\":10,\"startDate\":\"2023-03-8\",\"workOnWeekends\":false}&effortAllocation={\"responsibleAllocation\":[{\"placeholderId\" : \"IEACW7SVNMAAAWLP\", \"dailyAllocation\" : [] } ], \"mode\":\"Basic\", \"totalEffort\":1200 }",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"bookings",
+								"IEACW7SVNYAAG7MO"
+							],
+							"query": [
+								{
+									"key": "responsibleId",
+									"value": "",
+									"description": "optional",
+									"disabled": true
+								},
+								{
+									"key": "responsiblePlaceholderId",
+									"value": "IEACW7SVNMAAAWLP",
+									"description": "optional"
+								},
+								{
+									"key": "bookingDates",
+									"value": "{\"duration\":10,\"startDate\":\"2023-03-8\",\"workOnWeekends\":false}",
+									"description": "required"
+								},
+								{
+									"key": "effortAllocation",
+									"value": "{\"responsibleAllocation\":[{\"placeholderId\" : \"IEACW7SVNMAAAWLP\", \"dailyAllocation\" : [] } ], \"mode\":\"Basic\", \"totalEffort\":1200 }"
+								}
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Booking",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/bookings/IEACW7SVNYAAG7MO",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"bookings",
+								"IEACW7SVNYAAG7MO"
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Job Roles",
+			"item": [
+				{
+					"name": "Get Job Roles by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/jobroles/IEACW7SVM4AAFWPB",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"jobroles",
+								"IEACW7SVM4AAFWPB"
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Job Roles",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/jobroles",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"jobroles"
+							],
+							"query": [
+								{
+									"key": "responsibleIds",
+									"value": null,
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Job Role",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/jobroles?title=Tester&shortTitle=QA&avatarColor=DarkBlue1",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"jobroles"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "Tester",
+									"description": "required"
+								},
+								{
+									"key": "shortTitle",
+									"value": "QA",
+									"description": "optional"
+								},
+								{
+									"key": "avatarColor",
+									"value": "DarkBlue1",
+									"description": "optional"
+								}
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Booking",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/jobroles/IEACW7SVM4AAJSME?title=Tester&shortTitle=QA&avatarColor=Green1",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"jobroles",
+								"IEACW7SVM4AAJSME"
+							],
+							"query": [
+								{
+									"key": "title",
+									"value": "Tester"
+								},
+								{
+									"key": "shortTitle",
+									"value": "QA"
+								},
+								{
+									"key": "avatarColor",
+									"value": "Green1"
+								},
+								{
+									"key": "responsibleId",
+									"value": "",
+									"description": "optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Booking",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/jobroles/IEACW7SVM4AAJSME",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"jobroles",
+								"IEACW7SVM4AAJSME"
+							]
+						},
+						"description": "Get all user level work schedule exclusions\n\n(https://developers.wrike.com/api/v4/user-schedule-exceptions/#query-user-schedule-exception)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Placeholders",
+			"item": [
+				{
+					"name": "Get all Placeholders",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/placeholders",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"placeholders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Placeholders by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/placeholders/IEACW7SVNMAAFOSW,IEACW7SVNMAAFOCG",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"placeholders",
+								"IEACW7SVNMAAFOSW,IEACW7SVNMAAFOCG"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Folder Blueprints",
+			"item": [
+				{
+					"name": "Get Folder Blueprints Tree",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folder_blueprints",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folder_blueprints"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Async Work Creation",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folder_blueprints/IEACW7SVI4OMYHGQ/launch_async?parent=IEACW7SVI4PMYIO6&title=New Project from Folder Blueprint Async&titlePrefix=NPFTA&copyDescriptions=true&notifyResponsibles=true&copyResponsibles=true&copyCustomFields=true&copyAttachments=fasle",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folder_blueprints",
+								"IEACW7SVI4OMYHGQ",
+								"launch_async"
+							],
+							"query": [
+								{
+									"key": "parent",
+									"value": "IEACW7SVI4PMYIO6",
+									"description": "Required"
+								},
+								{
+									"key": "title",
+									"value": "New Project from Folder Blueprint Async",
+									"description": "Required"
+								},
+								{
+									"key": "titlePrefix",
+									"value": "NPFTA",
+									"description": "Optional"
+								},
+								{
+									"key": "copyDescriptions",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "notifyResponsibles",
+									"value": "true",
+									"description": "optional"
+								},
+								{
+									"key": "copyResponsibles",
+									"value": "true",
+									"description": "Optional (true or false)Optional"
+								},
+								{
+									"key": "copyCustomFields",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "copyAttachments",
+									"value": "fasle",
+									"description": "optional"
+								},
+								{
+									"key": "rescheduleDate",
+									"value": "",
+									"description": "Optional (yyyy-MM-dd)",
+									"disabled": true
+								},
+								{
+									"key": "rescheduleMode",
+									"value": "",
+									"description": "Optional (start or end)",
+									"disabled": true
+								},
+								{
+									"key": "entryLimit",
+									"value": "",
+									"description": "Optional (max 250)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Copy Folder is the equivilent of the duplication in the Wrike UI\n\nThe parameters mostly follows what you can do in the UI\n\nThe example here creates a copy of the project [IEACW7SVI4OMYHGQ] and places the duplicate in the folder [IEACW7SVI4PMYIO6]\n\nThe new project will be named \"New Project from Template\" and all tasks/folders will be prefix'ed with \"NPFT\"\n\nInclude descriptions, responsibled, custom fields and custom statuses in the new copy\n\nhttps://developers.wrike.com/api/v4/folders-projects/#copy-folder"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tasks Blueprints",
+			"item": [
+				{
+					"name": "Get Task Blueprints Tree",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/task_blueprints",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"task_blueprints"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Async Work Creation",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/task_blueprints/IEACW7SVI4OMYHGQ/launch_async?superTaskId=IEACW7SVI4PMYIO6&title=New Project from Task Blueprint Async&titlePrefix=NPFTA&copyDescriptions=true&notifyResponsibles=true&copyResponsibles=true&copyCustomFields=true&copyAttachments=fasle",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"task_blueprints",
+								"IEACW7SVI4OMYHGQ",
+								"launch_async"
+							],
+							"query": [
+								{
+									"key": "superTaskId",
+									"value": "IEACW7SVI4PMYIO6",
+									"description": "ID of parent task. Set this to add work from the task-based template as a subtask. Either this parameter or parentId is required. parentId and superTaskId cannot be set simultaneously."
+								},
+								{
+									"key": "parentId",
+									"value": null,
+									"description": "ID of parent folder or project. Set this to put work from the template to the specific folder or project. Either this parameter or superTaskId is required. parentId and superTaskId cannot be set simultaneously",
+									"disabled": true
+								},
+								{
+									"key": "title",
+									"value": "New Project from Task Blueprint Async",
+									"description": "Required"
+								},
+								{
+									"key": "titlePrefix",
+									"value": "NPFTA",
+									"description": "Optional"
+								},
+								{
+									"key": "copyDescriptions",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "notifyResponsibles",
+									"value": "true",
+									"description": "optional"
+								},
+								{
+									"key": "copyResponsibles",
+									"value": "true",
+									"description": "Optional (true or false)Optional"
+								},
+								{
+									"key": "copyCustomFields",
+									"value": "true",
+									"description": "Optional (true or false)"
+								},
+								{
+									"key": "copyAttachments",
+									"value": "fasle",
+									"description": "optional"
+								},
+								{
+									"key": "rescheduleDate",
+									"value": "",
+									"description": "Optional (yyyy-MM-dd)",
+									"disabled": true
+								},
+								{
+									"key": "rescheduleMode",
+									"value": "",
+									"description": "Optional (start or end)",
+									"disabled": true
+								},
+								{
+									"key": "entryLimit",
+									"value": "",
+									"description": "Optional (max 250)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Copy Folder is the equivilent of the duplication in the Wrike UI\n\nThe parameters mostly follows what you can do in the UI\n\nThe example here creates a copy of the project [IEACW7SVI4OMYHGQ] and places the duplicate in the folder [IEACW7SVI4PMYIO6]\n\nThe new project will be named \"New Project from Template\" and all tasks/folders will be prefix'ed with \"NPFT\"\n\nInclude descriptions, responsibled, custom fields and custom statuses in the new copy\n\nhttps://developers.wrike.com/api/v4/folders-projects/#copy-folder"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "EDiscovery",
+			"item": [
+				{
+					"name": "eDiscovery Search",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/ediscovery_search?scopes=[task]&terms=[\"test\"]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"ediscovery_search"
+							],
+							"query": [
+								{
+									"key": "scopes",
+									"value": "[task]",
+									"description": "Required"
+								},
+								{
+									"key": "terms",
+									"value": "[\"test\"]",
+									"description": "Terms to search. Either this parameter or targetUserId is required. terms and targetUserId cannot be set simultaneously."
+								},
+								{
+									"key": "targetUserId",
+									"value": null,
+									"description": "User id to limit the result. Either this parameter or targetUserId is required. terms and targetUserId cannot be set simultaneously.",
+									"disabled": true
+								},
+								{
+									"key": "timeout",
+									"value": null,
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Hourly Rates",
+			"item": [
+				{
+					"name": "Provision Hourly Rates (up to 100 users)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/contacts/KUAJRJHA/hourly_rates_provision?userRates=[{\"contact\":\"KUAJRJHA\",\"rateType\":\"Bill\",\"rateValue\":300,\"rateSource\":\"User\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"contacts",
+								"KUAJRJHA",
+								"hourly_rates_provision"
+							],
+							"query": [
+								{
+									"key": "userRates",
+									"value": "[{\"contact\":\"KUAJRJHA\",\"rateType\":\"Bill\",\"rateValue\":300,\"rateSource\":\"User\"}]"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Hourly Rates (up to 100 users)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/contacts/KUAJRJHA/hourly_rates_provision?userRates=[{\"contact\":\"KUAJRJHA\",\"rateType\":\"Bill\",\"rateSource\":\"JobRole\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"contacts",
+								"KUAJRJHA",
+								"hourly_rates_provision"
+							],
+							"query": [
+								{
+									"key": "userRates",
+									"value": "[{\"contact\":\"KUAJRJHA\",\"rateType\":\"Bill\",\"rateSource\":\"JobRole\"}]"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Custom Item Types",
+			"item": [
+				{
+					"name": "Get All Custom Item Types",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/custom_item_types",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"custom_item_types"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Custom Item Types by Space",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/spaces/IEAFTYTVI46RSF3U/custom_item_types",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"spaces",
+								"IEAFTYTVI46RSF3U",
+								"custom_item_types"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Work from Custom Item Type",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/custom_item_types/IEAFTYTVPIAAJXKY/instantiate?parentId&title",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"custom_item_types",
+								"IEAFTYTVPIAAJXKY",
+								"instantiate"
+							],
+							"query": [
+								{
+									"key": "superTaskId",
+									"value": null,
+									"description": "Parent Task (cannot be combined with parentId) (optional)",
+									"disabled": true
+								},
+								{
+									"key": "parentId",
+									"value": null
+								},
+								{
+									"key": "title",
+									"value": null
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User Types",
+			"item": [
+				{
+					"name": "Get User Types",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/user_types",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"user_types"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Webhooks",
+			"item": [
+				{
+					"name": "Get all Webhooks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/webhooks",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"webhooks"
+							]
+						},
+						"description": "Get a list of all webhooks created using the same API Token\n\n(https://developers.wrike.com/webhooks/)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Webhook by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/webhooks/IEAB2BV6JAABHOOP",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"webhooks",
+								"IEAB2BV6JAABHOOP"
+							]
+						},
+						"description": "Show details of a specific webhook by ID. \n\nYou can only access webhooks created with the same API Token\n\n(https://developers.wrike.com/webhooks/)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create a Webhook on Folder or Project",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4QNS5V7/webhooks?hookUrl=https://www.workato.com/webhooks/rest/878303bc-09fe-445d-aa12-fef6ccdcc0a5/feature-request-status-change&events=[TaskStatusChanged]&recursive=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4QNS5V7",
+								"webhooks"
+							],
+							"query": [
+								{
+									"key": "hookUrl",
+									"value": "https://www.workato.com/webhooks/rest/878303bc-09fe-445d-aa12-fef6ccdcc0a5/feature-request-status-change",
+									"description": "Required"
+								},
+								{
+									"key": "events",
+									"value": "[TaskStatusChanged]",
+									"description": "Optional"
+								},
+								{
+									"key": "recursive",
+									"value": "true",
+									"description": "Optional"
+								},
+								{
+									"key": "secret",
+									"value": "8hojns-089YAS0idas=D90HA0I",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get a list of all webhooks created using the same API Token\n\nhttps://developers.wrike.com/webhooks/"
+					},
+					"response": []
+				},
+				{
+					"name": "Create a Webhook on Folder or Project Copy",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/spaces/IEACW7SVI4OKD3FN/webhooks?hookUrl=https://webhook.site/4fe9e313-191b-4224-be57-3bb0f6cce5d7&events=[TaskCreated]&recursive=true",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"spaces",
+								"IEACW7SVI4OKD3FN",
+								"webhooks"
+							],
+							"query": [
+								{
+									"key": "hookUrl",
+									"value": "https://webhook.site/4fe9e313-191b-4224-be57-3bb0f6cce5d7",
+									"description": "Required"
+								},
+								{
+									"key": "events",
+									"value": "[TaskCreated]",
+									"description": "Optional"
+								},
+								{
+									"key": "recursive",
+									"value": "true",
+									"description": "Optional"
+								},
+								{
+									"key": "secret",
+									"value": "8hojns-089YAS0idas=D90HA0I",
+									"description": "Optional",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get a list of all webhooks created using the same API Token\n\nhttps://developers.wrike.com/webhooks/"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Webhook State",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/webhooks/IEAFJO5YJAABEBRM?status=Suspended",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"webhooks",
+								"IEAFJO5YJAABEBRM"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Suspended",
+									"description": "Required"
+								}
+							]
+						},
+						"description": "Update the state of a webhook\n\nIf you shut down your endpoint or it is not accessible via the internet, then we automatically suspend the webhook after 3 retries. \n\nCall this method with status=Active to enable the Webhook again\n\nhttps://developers.wrike.com/webhooks/"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Webhook",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://www.wrike.com/api/v4/webhooks/IEACW7SVJAAAGXBK",
+							"protocol": "https",
+							"host": [
+								"www",
+								"wrike",
+								"com"
+							],
+							"path": [
+								"api",
+								"v4",
+								"webhooks",
+								"IEACW7SVJAAAGXBK"
+							]
+						},
+						"description": "Delete a webhook permanently\n\nYou can only access webhooks created with the same API Token\n\nhttps://developers.wrike.com/webhooks/"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "NextPageToken",
+			"item": [
+				{
+					"name": "Query Tasks in a specific Folder/Project using nextPageToken",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/folders/IEACW7SVI4OMYFIY/tasks?nextPageToken=ABOGYKIAAAAAOAAAAABAAAABOEAAAAACBILN4OOHJQPZE",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"folders",
+								"IEACW7SVI4OMYFIY",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "nextPageToken",
+									"value": "ABOGYKIAAAAAOAAAAABAAAABOEAAAAACBILN4OOHJQPZE",
+									"description": "Required (overrides all other parameters in request)"
+								}
+							]
+						},
+						"description": "Get the next result set page of task\n\nLook out of another nextPageToken which will indicate that you need to continue getting more pages. Continue until you do not have a nextPageToken in the JSON result\n\nThe result will only include tasks that is shared with the authenticated user (determined by the API Token)\n\nhttps://developers.wrike.com/api/v4/tasks/#query-tasks"
+					},
+					"response": []
+				}
+			],
+			"description": "How to use nextPageToken\n\nIf you see a nextPageToken in any JSON return results, you need to handle pagination of the result which means the result is containing more items that the allowed pageSize (which for some calls can be controlled) and each API method has a maximum set.\n\nThe JSON result will look something like this\n\n{\n  \"kind\": \"tasks\",\n  \"nextPageToken\": \"ABOGYKIAAAAAOAAAAABAAAABOEAAAAACBIJUQHBQA5XRM\",\n  \"responseSize\": 369,\n  \"data\": [...]\n}\n\nSee examples in this folder how to use nextPageToken",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Meta Data",
+			"item": [
+				{
+					"name": "Update Metadata",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJ0dCI6InAiLCJhbGciOiJIUzI1NiIsInR2IjoiMSJ9.eyJkIjoie1wiYVwiOjE4MzkwMjgsXCJpXCI6NjExMDEyOSxcImNcIjo0NjEwNTk4LFwidlwiOm51bGwsXCJ1XCI6MzU5NjA2MyxcInJcIjpcIlVTXCIsXCJzXCI6W1wiV1wiLFwiRlwiLFwiSVwiLFwiVVwiLFwiS1wiLFwiQ1wiLFwiQVwiLFwiTFwiXSxcInpcIjpbXSxcInRcIjowfSIsImlhdCI6MTU1NTQyNjc4MX0.w3f4kT3J06YzTPPpK6y29LxXZt3iZDqxUrqKjl4AnXQ",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks/IEABYD5UKQKIA5MK?metadata=[{\"key\":\"SFDCID\",\"value\":\"12345\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks",
+								"IEABYD5UKQKIA5MK"
+							],
+							"query": [
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"SFDCID\",\"value\":\"12345\"}]"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Meta Data on Contact",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJ0dCI6InAiLCJhbGciOiJIUzI1NiIsInR2IjoiMSJ9.eyJkIjoie1wiYVwiOjE4MzkwMjgsXCJpXCI6NjExMDEyOSxcImNcIjo0NjEwNTk4LFwidlwiOm51bGwsXCJ1XCI6MzU5NjA2MyxcInJcIjpcIlVTXCIsXCJzXCI6W1wiV1wiLFwiRlwiLFwiSVwiLFwiVVwiLFwiS1wiLFwiQ1wiLFwiQVwiLFwiTFwiXSxcInpcIjpbXSxcInRcIjowfSIsImlhdCI6MTU1NTQyNjc4MX0.w3f4kT3J06YzTPPpK6y29LxXZt3iZDqxUrqKjl4AnXQ",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/contacts/KUAD6YLW?metadata=[{\"key\":\"skills\",\"value\":\"ux,java\"}]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"contacts",
+								"KUAD6YLW"
+							],
+							"query": [
+								{
+									"key": "metadata",
+									"value": "[{\"key\":\"skills\",\"value\":\"ux,java\"}]"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Meta Data",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{WrikeAPI}}/tasks?metadata={\"key\":\"SFDCID\",\"value\":\"12345\"}&fields=[metadata]",
+							"host": [
+								"{{WrikeAPI}}"
+							],
+							"path": [
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "metadata",
+									"value": "{\"key\":\"SFDCID\",\"value\":\"12345\"}"
+								},
+								{
+									"key": "fields",
+									"value": "[metadata]"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{APIToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}

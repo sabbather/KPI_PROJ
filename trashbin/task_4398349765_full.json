@@ -1,0 +1,92 @@
+{
+  "id": "MAAAAAEGKX3F",
+  "accountId": "IEAGWGLX",
+  "title": "Taśmy detektorów",
+  "description": "Trzeba zaktualizować taśmy detektorów zgodnie z tym co wyspecyfikował Marcin Sobstyl<br /><img src=\"https://storage-gcp.app-eu.wrike.com/filemeta/thumb100/F694342670.A7018871\" /><br />",
+  "briefDescription": "Trzeba zaktualizować taśmy detektorów zgodnie z tym co wyspecyfikował Marcin Sobstyl",
+  "parentIds": [
+    "IEAGWGLXI7777777"
+  ],
+  "superParentIds": [
+    "MQAAAAEF0qR7"
+  ],
+  "sharedIds": [
+    "KUAXCYUL",
+    "KUAXCYJW",
+    "KUAXCZE5",
+    "KX7X2BSA",
+    "KUAW5IPR",
+    "KUAXFRMB",
+    "KUAXCYD7",
+    "KUAXCYUZ",
+    "KUAXCY3G",
+    "KUAXCY2C",
+    "KUAW5HIL",
+    "KUAXCYCY"
+  ],
+  "responsibleIds": [
+    "KUAXCZE5"
+  ],
+  "status": "Active",
+  "importance": "Normal",
+  "createdDate": "2026-03-13T06:00:29Z",
+  "updatedDate": "2026-03-27T11:27:11Z",
+  "dates": {
+    "type": "Planned",
+    "duration": 9120,
+    "start": "2026-04-06T09:00:00",
+    "due": "2026-04-30T17:00:00"
+  },
+  "scope": "WsTask",
+  "authorIds": [
+    "KUAXCYD7"
+  ],
+  "customStatusId": "IEAGWGLXJMGYX4NC",
+  "hasAttachments": true,
+  "permalink": "https://app-eu.wrike.com/open.htm?id=4398349765",
+  "priority": "017108007fffffffffff8600",
+  "followedByMe": false,
+  "followerIds": [
+    "KUAXCZE5",
+    "KUAXCYD7"
+  ],
+  "superTaskIds": [
+    "MAAAAAEHN1TK"
+  ],
+  "subTaskIds": [],
+  "dependencyIds": [],
+  "metadata": [],
+  "customFields": [],
+  "effortAllocation": {
+    "allocatedEffort": 70,
+    "responsibleAllocation": [
+      {
+        "userId": "KUAXCZE5",
+        "dailyAllocation": [
+          {
+            "date": "2026-04-06",
+            "effortMinutes": 14
+          },
+          {
+            "date": "2026-04-07",
+            "effortMinutes": 14
+          },
+          {
+            "date": "2026-04-08",
+            "effortMinutes": 14
+          },
+          {
+            "date": "2026-04-09",
+            "effortMinutes": 14
+          },
+          {
+            "date": "2026-04-10",
+            "effortMinutes": 14
+          }
+        ]
+      }
+    ],
+    "mode": "Flexible",
+    "totalEffort": 480
+  }
+}
