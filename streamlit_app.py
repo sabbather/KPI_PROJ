@@ -66,6 +66,15 @@ def iso_to_date(value: Optional[str]) -> Optional[date]:
         return None
 
 
+def iso_to_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 def extract_planned_hours(task: Dict[str, Any], planned_field_id: str) -> Optional[float]:
     for field in task.get("customFields", []):
         if field.get("id") == planned_field_id:
@@ -115,8 +124,29 @@ def allocated_minutes(task: Dict[str, Any]) -> int:
     return int(val or 0)
 
 
+def _custom_status_id(task: Dict[str, Any]) -> Optional[str]:
+    custom_status = task.get("customStatusId")
+    if custom_status:
+        return custom_status
+    project_info = task.get("project")
+    if isinstance(project_info, dict):
+        return project_info.get("customStatusId")
+    return None
+
+
+def _completed_datetime(task: Dict[str, Any]) -> Optional[datetime]:
+    completed = task.get("completedDate")
+    if not completed:
+        project_info = task.get("project")
+        if isinstance(project_info, dict):
+            completed = project_info.get("completedDate")
+    return iso_to_datetime(completed)
+
+
 def is_completed(task: Dict[str, Any], completed_status_id: str) -> bool:
-    return task.get("customStatusId") == completed_status_id
+    if not completed_status_id:
+        return False
+    return _custom_status_id(task) == completed_status_id
 
 
 def completion_block(completed: int, planned: int, label: str):
@@ -594,11 +624,14 @@ def aggregate_core_items(
         )
         completed = is_completed(task, completed_status_id)
         due_flag = bool(due and due <= today)
+        completed_datetime = _completed_datetime(task)
         time_progress = None
-        if start and due and due > start and start <= today:
+        reference_date = completed_datetime.date() if completed_datetime else today
+        if start and due and due > start and start <= reference_date:
             span = (due - start).days
             if span > 0:
-                time_progress = int(round(((today - start).days / span) * 100))
+                elapsed = (min(reference_date, due) - start).days
+                time_progress = int(round(elapsed / span * 100))
 
         item_type_label = "Core task" if ctype == core_task_type else "Core project"
         base_row = {
@@ -613,6 +646,7 @@ def aggregate_core_items(
             "time_progress_pct": time_progress,
             "due_today_or_past": due_flag,
             "completed": completed,
+            "completed_date": completed_datetime,
             "warnings": [],
         }
         if planned_hours is None:
@@ -915,8 +949,9 @@ def main() -> None:
         ("planned_hours", "Plan [h]"),
         ("alloc_vs_plan_pct", "Alloc vs plan %"),
         ("time_progress_pct", "Time progress %"),
-        ("due_date", "Due date"),
         ("start_date", "Start date"),
+        ("due_date", "Due date"),
+        ("completed_date", "Completed date"),
         ("completed", "Completed"),
         ("due_today_or_past", "Due today/past"),
         ("permalink", "Permalink"),
