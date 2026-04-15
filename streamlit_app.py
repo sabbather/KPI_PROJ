@@ -16,10 +16,15 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
+import re
+from pathlib import Path
+from urllib.parse import quote
 
 import pandas as pd
 import requests
@@ -39,6 +44,21 @@ DEFAULT_PLANNED_FIELD_ID = os.getenv("WRIKE_PLANNED_EFFORT_FIELD_ID", "IEAGWGLXJ
 DEFAULT_COMPLETED_STATUS_ID = os.getenv("WRIKE_COMPLETED_STATUS_ID", "IEAGWGLXJMGYX4ND")
 SKIPPED_CORE_PROJECT_TITLES = {"3. Mechanical Design"}
 
+MS_GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
+MS_SHAREPOINT_HOST = os.getenv("MS_SHAREPOINT_HOST", "pidpolska.sharepoint.com")
+MS_SHAREPOINT_SITE_PATH = os.getenv("MS_SHAREPOINT_SITE_PATH", "/sites/Multicontrol")
+MS_TENANT_ID = os.getenv("TENANT_ID", "")
+MS_CLIENT_ID = os.getenv("CLIENT_ID", "")
+MS_CLIENT_SECRET = os.getenv("KPI_MONITOR_SECRET", "")
+POZYCJE_LIST_ID = os.getenv("POZYCJE_ID", "")
+NAGLOWEK_LIST_ID = os.getenv("NAGLOWEK_ID", "")
+MC_SITE_ID = os.getenv("DOK_OPER_ID", "")
+POZYCJE_PART_FIELD = os.getenv("POZYCJE_PART_FIELD", "field_2")
+POZYCJE_HEADER_REF_FIELD = os.getenv("POZYCJE_HEADER_REF_FIELD", "LinkTitle")
+HEADER_ID_FIELD = os.getenv("HEADER_ID_FIELD", "id")
+HEADER_ORDER_FIELD = os.getenv("HEADER_ORDER_FIELD", "LinkTitle")
+SOLIDWORKS_CACHE_FILE = Path(".cache") / "solidworks_cache.json"
+
 
 # ---- Logging ---------------------------------------------------------------
 def _init_logs() -> None:
@@ -55,6 +75,96 @@ def reset_logs() -> None:
     st.session_state["logs"] = []
 
 
+def _init_solidworks_caches() -> None:
+    if not st.session_state.get("solidworks_cache_loaded"):
+        loaded_items: Dict[str, Dict[str, Any]] = {}
+        loaded_orders: Dict[str, Optional[str]] = {}
+        try:
+            if SOLIDWORKS_CACHE_FILE.exists():
+                payload = json.loads(SOLIDWORKS_CACHE_FILE.read_text(encoding="utf-8"))
+                loaded_items = payload.get("items", {}) or {}
+                loaded_orders = payload.get("orders", {}) or {}
+                log(
+                    f"Loaded Solidworks cache from disk: "
+                    f"items={len(loaded_items)}, orders={len(loaded_orders)}"
+                )
+        except Exception as exc:  # noqa: BLE001
+            log(f"Failed to load Solidworks cache from disk: {exc}")
+        st.session_state["solidworks_item_cache"] = loaded_items
+        st.session_state["solidworks_order_pdf_cache"] = loaded_orders
+        st.session_state["solidworks_cache_loaded"] = True
+        return
+    if "solidworks_item_cache" not in st.session_state:
+        st.session_state["solidworks_item_cache"] = {}
+    if "solidworks_order_pdf_cache" not in st.session_state:
+        st.session_state["solidworks_order_pdf_cache"] = {}
+
+
+def _solidworks_item_cache() -> Dict[str, Dict[str, Any]]:
+    _init_solidworks_caches()
+    return st.session_state["solidworks_item_cache"]
+
+
+def _solidworks_order_pdf_cache() -> Dict[str, Optional[str]]:
+    _init_solidworks_caches()
+    return st.session_state["solidworks_order_pdf_cache"]
+
+
+def comments_signature(comments: List[Dict[str, Any]]) -> str:
+    relevant = []
+    for comment in comments:
+        relevant.append(
+            {
+                "id": comment.get("id"),
+                "updatedDate": comment.get("updatedDate"),
+                "text": comment.get("text"),
+            }
+        )
+    payload = json.dumps(relevant, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+
+def persist_solidworks_cache() -> None:
+    _init_solidworks_caches()
+    try:
+        SOLIDWORKS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "items": st.session_state.get("solidworks_item_cache", {}),
+            "orders": st.session_state.get("solidworks_order_pdf_cache", {}),
+        }
+        SOLIDWORKS_CACHE_FILE.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log(f"Failed to persist Solidworks cache: {exc}")
+
+
+# regex used later to find hyphenated assembly numbers in Wrike comments
+ASSEMBLY_NUMBER_RE = re.compile(r"\d{2,}-\d+")
+
+
+@dataclass
+class SolidworksContext:
+    graph_token: Optional[str]
+    part_number_map: Dict[str, str]
+    header_map: Dict[str, str]
+
+    def resolve_order_id(self, part_number: str) -> Optional[str]:
+        normalized = normalize_part_number(part_number)
+        if not normalized:
+            return None
+        item_id = self.part_number_map.get(normalized)
+        if not item_id:
+            return None
+        return self.header_map.get(item_id)
+
+
+def normalize_part_number(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().upper()
+    return normalized if normalized else None
 # ---- Helpers ---------------------------------------------------------------
 def iso_to_date(value: Optional[str]) -> Optional[date]:
     if not value:
@@ -197,6 +307,28 @@ def bool_symbol(val: Any) -> str:
     return ""
 
 
+def _to_date_only(value: Any) -> Optional[date]:
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
+def due_symbol(due_flag: Any, completed_flag: Any, completed_date: Any, due_date: Any) -> str:
+    if due_flag is True and completed_flag is False:
+        return "⚠️"
+    if due_flag is True and completed_flag is True:
+        completed_day = _to_date_only(completed_date)
+        due_day = _to_date_only(due_date)
+        if completed_day and due_day and completed_day <= due_day:
+            return "✅"
+        return "⚠️"
+    return bool_symbol(due_flag)
+
+
 def render_df(
     df: pd.DataFrame,
     cols: list[str | tuple[str, str]],
@@ -204,9 +336,31 @@ def render_df(
 ) -> None:
     """Render dataframe with safe fallback if Styler blows up."""
     df_local = df.copy()
-    for bool_col in ["due_today_or_past", "completed"]:
-        if bool_col in df_local:
-            df_local[bool_col] = df_local[bool_col].map(bool_symbol)
+    if "completed" in df_local:
+        completed_raw = df_local["completed"].copy()
+        df_local["completed"] = df_local["completed"].map(bool_symbol)
+    else:
+        completed_raw = pd.Series([None] * len(df_local))
+    if "due_today_or_past" in df_local:
+        completed_dates = (
+            df_local["completed_date"].copy()
+            if "completed_date" in df_local
+            else pd.Series([None] * len(df_local))
+        )
+        due_dates = (
+            df_local["due_date"].copy()
+            if "due_date" in df_local
+            else pd.Series([None] * len(df_local))
+        )
+        df_local["due_today_or_past"] = [
+            due_symbol(due_flag, completed_flag, completed_date, due_date)
+            for due_flag, completed_flag, completed_date, due_date in zip(
+                df_local["due_today_or_past"],
+                completed_raw,
+                completed_dates,
+                due_dates,
+            )
+        ]
     for c in ["allocated_hours", "planned_hours", "alloc_vs_plan_pct", "time_progress_pct"]:
         if c in df_local:
             df_local[c] = pd.to_numeric(df_local[c], errors="coerce").round(0)
@@ -415,11 +569,227 @@ def fetch_core_project_tasks(
     return items
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_wrike_comments(base_url: str, api_key: str, path: str) -> List[Dict[str, Any]]:
+    params: Dict[str, Any] = {}
+    comments: List[Dict[str, Any]] = []
+    next_token: Optional[str] = None
+    while True:
+        page_params = dict(params)
+        if next_token:
+            page_params["nextPageToken"] = next_token
+        data = api_get(base_url, api_key, path, params=page_params)
+        page_items = data.get("data", [])
+        comments.extend(page_items)
+        next_token = data.get("nextPageToken")
+        if not next_token:
+            break
+    return comments
+
+
+def extract_solidworks_numbers(comments: List[Dict[str, Any]]) -> List[str]:
+    numbers: List[str] = []
+    for comment in comments:
+        text = comment.get("text") or ""
+        if "KX7XETJ3" not in text:
+            continue
+        for match in ASSEMBLY_NUMBER_RE.findall(text):
+            normalized = normalize_part_number(match)
+            if not normalized:
+                continue
+            if normalized not in numbers:
+                numbers.append(normalized)
+    return numbers
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_graph_token(tenant_id: str, client_id: str, client_secret: str) -> Optional[str]:
+    if not tenant_id or not client_id or not client_secret:
+        return None
+    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    payload = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "client_credentials",
+        "scope": "https://graph.microsoft.com/.default",
+    }
+    try:
+        resp = requests.post(token_url, data=payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        resp.raise_for_status()
+        return resp.json().get("access_token")
+    except requests.RequestException as exc:  # noqa: BLE001
+        log(f"Graph token request failed: {exc}")
+    return None
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_sharepoint_site_id(token: str, hostname: str, site_path: str) -> Optional[str]:
+    if not token or not hostname or not site_path:
+        return None
+    normalized_path = site_path.strip("/")
+    if not normalized_path:
+        return None
+    url = f"{MS_GRAPH_BASE_URL}/sites/{hostname}:/{normalized_path}"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        resp = requests.get(url, headers=headers)
+        resp.raise_for_status()
+        return resp.json().get("id")
+    except requests.RequestException as exc:  # noqa: BLE001
+        log(f"SharePoint site lookup failed: {exc}")
+    return None
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_list_item_fields(
+    token: str,
+    site_id: str,
+    list_id: str,
+    select_fields: Tuple[str, ...],
+) -> List[Dict[str, Any]]:
+    if not token or not site_id or not list_id or not select_fields:
+        return []
+    headers = {"Authorization": f"Bearer {token}"}
+    next_link = f"{MS_GRAPH_BASE_URL}/sites/{site_id}/lists/{list_id}/items?$select=id&$top=200"
+    item_ids: List[str] = []
+    while next_link:
+        try:
+            resp = requests.get(next_link, headers=headers)
+            resp.raise_for_status()
+        except requests.RequestException as exc:  # noqa: BLE001
+            log(f"List items fetch failed for {list_id}: {exc}")
+            return []
+        data = resp.json()
+        for entry in data.get("value", []):
+            item_id = entry.get("id")
+            if item_id:
+                item_ids.append(item_id)
+        next_link = data.get("@odata.nextLink")
+
+    expanded = []
+    expand_value = "fields(select=" + ",".join(select_fields) + ")"
+    for item_id in item_ids:
+        detail_url = f"{MS_GRAPH_BASE_URL}/sites/{site_id}/lists/{list_id}/items/{item_id}"
+        detail_params = {"expand": expand_value}
+        try:
+            detail_resp = requests.get(detail_url, headers=headers, params=detail_params)
+            detail_resp.raise_for_status()
+        except requests.RequestException as exc:  # noqa: BLE001
+            log(f"List item fields fetch failed for {list_id}#{item_id}: {exc}")
+            continue
+        fields = detail_resp.json().get("fields")
+        if fields:
+            expanded.append(fields)
+    return expanded
+
+
+def build_part_number_lookup(token: str, site_id: str, list_id: str) -> Dict[str, str]:
+    select_fields = (POZYCJE_PART_FIELD, POZYCJE_HEADER_REF_FIELD)
+    items = fetch_list_item_fields(token, site_id, list_id, select_fields)
+    mapping: Dict[str, str] = {}
+    for item in items:
+        fields = item or {}
+        part_value = normalize_part_number(fields.get(POZYCJE_PART_FIELD))
+        header_id = fields.get(POZYCJE_HEADER_REF_FIELD)
+        if header_id is None:
+            header_id = fields.get("id")
+        if part_value and header_id is not None:
+            mapping[part_value] = str(header_id)
+    log(f"Loaded {len(mapping)} part numbers from list {list_id}")
+    return mapping
+
+
+def build_header_lookup(token: str, site_id: str, list_id: str) -> Dict[str, str]:
+    select_fields = (HEADER_ID_FIELD, HEADER_ORDER_FIELD)
+    items = fetch_list_item_fields(token, site_id, list_id, select_fields)
+    mapping: Dict[str, str] = {}
+    for item in items:
+        fields = item or {}
+        header_id = fields.get(HEADER_ID_FIELD)
+        if header_id is None:
+            header_id = fields.get("id")
+        order_value = fields.get(HEADER_ORDER_FIELD)
+        if header_id is not None and order_value:
+            mapping[str(header_id)] = str(order_value).strip()
+    log(f"Loaded {len(mapping)} order references from list {list_id}")
+    return mapping
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def graph_search_pdf(token: str, order_id: str) -> Optional[str]:
+    if not token or not order_id or not MC_SITE_ID:
+        return None
+    escaped_order = order_id.replace("'", "''")
+    query = quote(f"'{escaped_order}'", safe="")
+    url = f"{MS_GRAPH_BASE_URL}/drives/{MC_SITE_ID}/root/search(q={query})"
+    headers = {
+        "Authorization": f"Bearer {token}",
+    }
+    try:
+        resp = requests.get(url, headers=headers)
+        resp.raise_for_status()
+    except requests.RequestException as exc:  # noqa: BLE001
+        log(f"Drive search for Order_ID {order_id} failed: {exc}")
+        return None
+    data = resp.json()
+    normalized_order = order_id.strip().lower()
+    fallback_url: Optional[str] = None
+    for item in data.get("value", []):
+        name = str(item.get("name") or "")
+        web_url = item.get("webUrl")
+        if not web_url or not name.lower().endswith(".pdf"):
+            continue
+        if normalized_order and normalized_order in name.lower():
+            return web_url
+        if fallback_url is None:
+            fallback_url = web_url
+    if fallback_url:
+        return fallback_url
+    log(f"No PDF found for Order_ID {order_id}")
+    return None
+
+
+def prepare_solidworks_context() -> Optional[SolidworksContext]:
+    if not (
+        MS_TENANT_ID
+        and MS_CLIENT_ID
+        and MS_CLIENT_SECRET
+        and POZYCJE_LIST_ID
+        and NAGLOWEK_LIST_ID
+        and MC_SITE_ID
+    ):
+        return None
+    token = fetch_graph_token(MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET)
+    if not token:
+        return None
+    site_id = fetch_sharepoint_site_id(token, MS_SHAREPOINT_HOST, MS_SHAREPOINT_SITE_PATH)
+    if not site_id:
+        return None
+    part_map = build_part_number_lookup(token, site_id, POZYCJE_LIST_ID)
+    header_map = build_header_lookup(token, site_id, NAGLOWEK_LIST_ID)
+    if not part_map or not header_map:
+        log("Solidworks lookup data incomplete; skipping PDF linking.")
+    return SolidworksContext(token, part_map, header_map)
+
+
 def clear_wrike_cache() -> None:
     fetch_client_projects.clear()
     fetch_tasks_for_project.clear()
     fetch_projects_with_customfields.clear()
     fetch_core_project_tasks.clear()
+    fetch_wrike_comments.clear()
+    fetch_graph_token.clear()
+    fetch_sharepoint_site_id.clear()
+    fetch_list_item_fields.clear()
+    graph_search_pdf.clear()
+    st.session_state.pop("solidworks_item_cache", None)
+    st.session_state.pop("solidworks_order_pdf_cache", None)
+    st.session_state.pop("solidworks_cache_loaded", None)
+    try:
+        if SOLIDWORKS_CACHE_FILE.exists():
+            SOLIDWORKS_CACHE_FILE.unlink()
+    except OSError as exc:
+        log(f"Failed to clear Solidworks disk cache: {exc}")
 
 
 # ---- Aggregation -----------------------------------------------------------
@@ -497,6 +867,9 @@ def aggregate_core_items(
     allowed_project_ids: Optional[Set[str]] = None,
     extra_alloc_by_project: Optional[Dict[str, int]] = None,
     extra_used_by_project: Optional[Dict[str, int]] = None,
+    wrike_base_url: Optional[str] = None,
+    wrike_api_key: Optional[str] = None,
+    solidworks_context: Optional[SolidworksContext] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
     tasks_by_id, _ = build_indexes(tasks)
     nearest_core_task, nearest_core_project = make_nearest_core_resolvers(
@@ -521,6 +894,55 @@ def aggregate_core_items(
     lookup = project_lookup or {}
     extra_alloc_by_project = extra_alloc_by_project or {}
     extra_used_by_project = extra_used_by_project or {}
+
+    def annotate_solidworks(item_id: str, is_task_item: bool) -> Tuple[Optional[str], List[str]]:
+        if not wrike_base_url or not wrike_api_key:
+            return None, []
+        item_cache = _solidworks_item_cache()
+        order_pdf_cache = _solidworks_order_pdf_cache()
+        cache_key = f"{'task' if is_task_item else 'folder'}:{item_id}"
+        path = f"tasks/{item_id}/comments" if is_task_item else f"folders/{item_id}/comments"
+        try:
+            comments = fetch_wrike_comments(wrike_base_url, wrike_api_key, path)
+        except Exception as exc:  # noqa: BLE001
+            log(f"Failed to load comments for {item_id}: {exc}")
+            return None, []
+        signature = comments_signature(comments)
+        cached = item_cache.get(cache_key)
+        if cached and cached.get("signature") == signature:
+            log(f"Solidworks cache hit for {cache_key}")
+            return cached.get("text"), list(cached.get("pdf_urls", []))
+        numbers = extract_solidworks_numbers(comments)
+        if not numbers:
+            item_cache[cache_key] = {"signature": signature, "text": None, "pdf_urls": []}
+            persist_solidworks_cache()
+            return None, []
+        entries: List[str] = []
+        unique_pdf_urls: List[str] = []
+        for number in numbers:
+            label = number
+            if solidworks_context:
+                order_id = solidworks_context.resolve_order_id(number)
+                if order_id and solidworks_context.graph_token:
+                    if order_id not in order_pdf_cache:
+                        order_pdf_cache[order_id] = graph_search_pdf(solidworks_context.graph_token, order_id)
+                        persist_solidworks_cache()
+                    pdf_url = order_pdf_cache[order_id]
+                    if pdf_url:
+                        label = f"{number} (SPEC)"
+                        if pdf_url not in unique_pdf_urls:
+                            unique_pdf_urls.append(pdf_url)
+                else:
+                    log(f"No header mapping for part number {number}")
+            entries.append(label)
+        text_value = ", ".join(entries)
+        item_cache[cache_key] = {
+            "signature": signature,
+            "text": text_value,
+            "pdf_urls": unique_pdf_urls,
+        }
+        persist_solidworks_cache()
+        return text_value, unique_pdf_urls
 
     def parent_ids(task: Dict[str, Any]) -> Iterable[str]:
         parents: List[str] = []
@@ -648,9 +1070,16 @@ def aggregate_core_items(
             "completed": completed,
             "completed_date": completed_datetime,
             "warnings": [],
+            "solidworks": None,
+            "solidworks_specs": [],
         }
         if planned_hours is None:
             base_row["warnings"].append("Brak Planned effort")
+
+        is_task_item = ctype == core_task_type
+        solidworks_text, solidworks_pdf_urls = annotate_solidworks(tid, is_task_item)
+        base_row["solidworks"] = solidworks_text
+        base_row["solidworks_specs"] = solidworks_pdf_urls
 
         if ctype == core_task_type:
             alloc_minutes = sum_alloc(nearest_core_task, tid, include_self=True)
@@ -829,6 +1258,34 @@ def build_tree_view(
     return readable
 
 
+def expand_dynamic_spec_columns(
+    project_df: pd.DataFrame, task_df: pd.DataFrame
+) -> Tuple[pd.DataFrame, pd.DataFrame, int]:
+    max_specs = 0
+    for df in [project_df, task_df]:
+        if df.empty or "solidworks_specs" not in df.columns:
+            continue
+        for value in df["solidworks_specs"]:
+            if isinstance(value, list):
+                max_specs = max(max_specs, len(value))
+
+    def apply(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+        out = df.copy()
+        specs_series = out["solidworks_specs"] if "solidworks_specs" in out.columns else pd.Series([[]] * len(out))
+        for idx in range(max_specs):
+            col = f"solidworks_pdf_{idx + 1}"
+            out[col] = specs_series.apply(
+                lambda urls: urls[idx] if isinstance(urls, list) and len(urls) > idx else None
+            )
+        if "solidworks_specs" in out.columns:
+            out = out.drop(columns=["solidworks_specs"])
+        return out
+
+    return apply(project_df), apply(task_df), max_specs
+
+
 # ---- UI --------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title="Wrike KPI – Core Items", layout="wide")
@@ -856,6 +1313,8 @@ def main() -> None:
     if not api_key or not client_folder:
         st.warning("Uzupełnij API key i ID folderu z projektami, aby pobrać dane.")
         return
+
+    solidworks_context = prepare_solidworks_context()
 
     # Step 1: projekty klienckie
     try:
@@ -939,11 +1398,16 @@ def main() -> None:
         allowed_project_ids=set(selected_projects),
         extra_alloc_by_project=extra_alloc_by_project,
         extra_used_by_project=extra_used_by_project,
+        wrike_base_url=base_url,
+        wrike_api_key=api_key,
+        solidworks_context=solidworks_context,
     )
+    project_df, task_df, spec_col_count = expand_dynamic_spec_columns(project_df, task_df)
     core_cols = [
         ("type", "Type"),
         ("project", "Project"),
         ("title", "Title"),
+        ("solidworks", "SOLIDWORKS"),
         ("allocated_hours", "Alloc [h]"),
         ("used_hours_until_yesterday", "Used until yesterday (h)"),
         ("planned_hours", "Plan [h]"),
@@ -957,6 +1421,8 @@ def main() -> None:
         ("permalink", "Permalink"),
         ("warnings", "Warnings"),
     ]
+    for idx in range(spec_col_count):
+        core_cols.insert(4 + idx, (f"solidworks_pdf_{idx + 1}", f"SPEC {idx + 1}"))
 
     def render_kpi_block(summary: Dict[str, Any], completion_label: str) -> None:
         col1, col2, col3 = st.columns(3)
@@ -997,7 +1463,15 @@ def main() -> None:
         if not project_df.empty or not task_df.empty
         else pd.DataFrame(),
         core_cols,
-        column_config={"permalink": st.column_config.LinkColumn("Link", display_text="otwórz")},
+        column_config={
+            "permalink": st.column_config.LinkColumn("Link", display_text="otwórz"),
+            **{
+                f"solidworks_pdf_{idx + 1}": st.column_config.LinkColumn(
+                    f"SPEC {idx + 1}", display_text=f"otwórz SPEC {idx + 1}"
+                )
+                for idx in range(spec_col_count)
+            },
+        },
     )
     with st.expander("Log (debug)"):
         _init_logs()
