@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -57,7 +58,12 @@ POZYCJE_PART_FIELD = os.getenv("POZYCJE_PART_FIELD", "field_2")
 POZYCJE_HEADER_REF_FIELD = os.getenv("POZYCJE_HEADER_REF_FIELD", "LinkTitle")
 HEADER_ID_FIELD = os.getenv("HEADER_ID_FIELD", "id")
 HEADER_ORDER_FIELD = os.getenv("HEADER_ORDER_FIELD", "LinkTitle")
+WRIKE_COMMENTS_CACHE_TTL_SEC = int(os.getenv("WRIKE_COMMENTS_CACHE_TTL_SEC", "43200"))
+WRIKE_DATA_CACHE_TTL_SEC = int(os.getenv("WRIKE_DATA_CACHE_TTL_SEC", "43200"))
+KPI_AGG_CACHE_TTL_SEC = int(os.getenv("KPI_AGG_CACHE_TTL_SEC", "3600"))
 SOLIDWORKS_CACHE_FILE = Path(".cache") / "solidworks_cache.json"
+WRIKE_COMMENTS_CACHE_FILE = Path(".cache") / "wrike_comments_cache.json"
+WRIKE_DATA_CACHE_FILE = Path(".cache") / "wrike_data_cache.json"
 
 
 # ---- Logging ---------------------------------------------------------------
@@ -73,6 +79,141 @@ def log(msg: str) -> None:
 
 def reset_logs() -> None:
     st.session_state["logs"] = []
+
+
+def _now_ts() -> int:
+    return int(time.time())
+
+
+def _read_json_file(path: Path, fallback: Any) -> Any:
+    try:
+        if not path.exists():
+            return fallback
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        log(f"Failed reading cache file {path}: {exc}")
+        return fallback
+
+
+def _write_json_file(path: Path, payload: Any) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        log(f"Failed writing cache file {path}: {exc}")
+
+
+def _init_perf_metrics() -> None:
+    if "perf_metrics" not in st.session_state:
+        st.session_state["perf_metrics"] = {
+            "wrike_comments_cache_hit": 0,
+            "wrike_comments_cache_miss": 0,
+            "kpi_aggregate_cache_hit": 0,
+            "kpi_aggregate_cache_miss": 0,
+            "stage_times": {},
+        }
+
+
+def reset_perf_metrics() -> None:
+    st.session_state["perf_metrics"] = {
+        "wrike_comments_cache_hit": 0,
+        "wrike_comments_cache_miss": 0,
+        "kpi_aggregate_cache_hit": 0,
+        "kpi_aggregate_cache_miss": 0,
+        "stage_times": {},
+    }
+
+
+def _inc_perf_metric(name: str, delta: int = 1) -> None:
+    _init_perf_metrics()
+    st.session_state["perf_metrics"][name] = st.session_state["perf_metrics"].get(name, 0) + delta
+
+
+def _set_stage_time(name: str, seconds: float) -> None:
+    _init_perf_metrics()
+    st.session_state["perf_metrics"]["stage_times"][name] = round(seconds, 3)
+
+
+def _init_wrike_caches() -> None:
+    if st.session_state.get("wrike_cache_loaded"):
+        return
+    comments_payload = _read_json_file(WRIKE_COMMENTS_CACHE_FILE, {})
+    data_payload = _read_json_file(WRIKE_DATA_CACHE_FILE, {})
+    st.session_state["wrike_comments_cache"] = comments_payload if isinstance(comments_payload, dict) else {}
+    st.session_state["wrike_data_cache"] = data_payload if isinstance(data_payload, dict) else {}
+    st.session_state["wrike_cache_loaded"] = True
+
+
+def _persist_wrike_comments_cache() -> None:
+    _init_wrike_caches()
+    _write_json_file(WRIKE_COMMENTS_CACHE_FILE, st.session_state.get("wrike_comments_cache", {}))
+
+
+def _persist_wrike_data_cache() -> None:
+    _init_wrike_caches()
+    _write_json_file(WRIKE_DATA_CACHE_FILE, st.session_state.get("wrike_data_cache", {}))
+
+
+def _wrike_cache_get(bucket: str, key: str, ttl_sec: int) -> Optional[Any]:
+    _init_wrike_caches()
+    cache_name = "wrike_comments_cache" if bucket == "comments" else "wrike_data_cache"
+    cache_dict = st.session_state.get(cache_name, {})
+    entry = cache_dict.get(key)
+    if not isinstance(entry, dict):
+        return None
+    cached_at = entry.get("cached_at")
+    if not isinstance(cached_at, (int, float)):
+        return None
+    if _now_ts() - int(cached_at) > ttl_sec:
+        return None
+    return entry.get("data")
+
+
+def _wrike_cache_set(bucket: str, key: str, value: Any) -> None:
+    _init_wrike_caches()
+    cache_name = "wrike_comments_cache" if bucket == "comments" else "wrike_data_cache"
+    cache_dict = st.session_state.get(cache_name, {})
+    cache_dict[key] = {"cached_at": _now_ts(), "data": value}
+    st.session_state[cache_name] = cache_dict
+    if bucket == "comments":
+        _persist_wrike_comments_cache()
+    else:
+        _persist_wrike_data_cache()
+
+
+def _init_kpi_aggregate_cache() -> None:
+    if "kpi_aggregate_cache" not in st.session_state:
+        st.session_state["kpi_aggregate_cache"] = {}
+
+
+def _kpi_aggregate_get(cache_key: str) -> Optional[Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]]:
+    _init_kpi_aggregate_cache()
+    entry = st.session_state["kpi_aggregate_cache"].get(cache_key)
+    if not isinstance(entry, dict):
+        return None
+    cached_at = entry.get("cached_at")
+    if not isinstance(cached_at, (int, float)):
+        return None
+    if _now_ts() - int(cached_at) > KPI_AGG_CACHE_TTL_SEC:
+        return None
+    project_df = entry.get("project_df")
+    task_df = entry.get("task_df")
+    summary = entry.get("summary")
+    if not isinstance(project_df, pd.DataFrame) or not isinstance(task_df, pd.DataFrame) or not isinstance(summary, dict):
+        return None
+    return project_df.copy(), task_df.copy(), dict(summary)
+
+
+def _kpi_aggregate_set(
+    cache_key: str, project_df: pd.DataFrame, task_df: pd.DataFrame, summary: Dict[str, Any]
+) -> None:
+    _init_kpi_aggregate_cache()
+    st.session_state["kpi_aggregate_cache"][cache_key] = {
+        "cached_at": _now_ts(),
+        "project_df": project_df.copy(),
+        "task_df": task_df.copy(),
+        "summary": dict(summary),
+    }
 
 
 def _init_solidworks_caches() -> None:
@@ -423,19 +564,29 @@ def api_get(
     return resp.json()
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=WRIKE_DATA_CACHE_TTL_SEC, show_spinner=False)
 def fetch_client_projects(
     base_url: str, api_key: str, client_folder_id: str
 ) -> List[Dict[str, Any]]:
+    cache_key = f"client_projects|{base_url.rstrip('/')}|{client_folder_id}"
+    cached = _wrike_cache_get("data", cache_key, WRIKE_DATA_CACHE_TTL_SEC)
+    if isinstance(cached, list):
+        return cached
     params = {"project": "true", "descendants": "false"}
     data = api_get(base_url, api_key, f"folders/{client_folder_id}/folders", params=params)
-    return data.get("data", [])
+    out = data.get("data", [])
+    _wrike_cache_set("data", cache_key, out)
+    return out
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=WRIKE_DATA_CACHE_TTL_SEC, show_spinner=False)
 def fetch_tasks_for_project(
     base_url: str, api_key: str, project_id: str
 ) -> List[Dict[str, Any]]:
+    cache_key = f"tasks_for_project|{base_url.rstrip('/')}|{project_id}"
+    cached = _wrike_cache_get("data", cache_key, WRIKE_DATA_CACHE_TTL_SEC)
+    if isinstance(cached, list):
+        return cached
     # Primary (validated) set from Postman hint
     primary_fields = [
         "superTaskIds",
@@ -498,14 +649,19 @@ def fetch_tasks_for_project(
     if chosen_fields is None:
         raise RuntimeError("Nie udało się pobrać tasków żadnym zestawem pól.")
 
+    _wrike_cache_set("data", cache_key, tasks)
     return tasks
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=WRIKE_DATA_CACHE_TTL_SEC, show_spinner=False)
 def fetch_projects_with_customfields(
     base_url: str, api_key: str, project_id: str
 ) -> List[Dict[str, Any]]:
     """Fetch all descendant projects (including core projects) with customFields."""
+    cache_key = f"projects_with_customfields|{base_url.rstrip('/')}|{project_id}"
+    cached = _wrike_cache_get("data", cache_key, WRIKE_DATA_CACHE_TTL_SEC)
+    if isinstance(cached, list):
+        return cached
     params: Dict[str, Any] = {
         "descendants": "true",
         "project": "true",
@@ -540,13 +696,18 @@ def fetch_projects_with_customfields(
             if page_count >= 10:
                 log("Stopped projects pagination after 10 pages (safety limit).")
             break
+    _wrike_cache_set("data", cache_key, items)
     return items
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=WRIKE_DATA_CACHE_TTL_SEC, show_spinner=False)
 def fetch_core_project_tasks(
     base_url: str, api_key: str, core_project_id: str
 ) -> List[Dict[str, Any]]:
+    cache_key = f"core_project_tasks|{base_url.rstrip('/')}|{core_project_id}"
+    cached = _wrike_cache_get("data", cache_key, WRIKE_DATA_CACHE_TTL_SEC)
+    if isinstance(cached, list):
+        return cached
     params: Dict[str, Any] = {
         "descendants": "true",
         "fields": json.dumps(["effortAllocation"]),
@@ -566,11 +727,17 @@ def fetch_core_project_tasks(
         next_token = data.get("nextPageToken") or None
         if not next_token:
             break
+    _wrike_cache_set("data", cache_key, items)
     return items
 
 
-@st.cache_data(ttl=300, show_spinner=False)
 def fetch_wrike_comments(base_url: str, api_key: str, path: str) -> List[Dict[str, Any]]:
+    cache_key = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+    cached = _wrike_cache_get("comments", cache_key, WRIKE_COMMENTS_CACHE_TTL_SEC)
+    if isinstance(cached, list):
+        _inc_perf_metric("wrike_comments_cache_hit")
+        return cached
+    _inc_perf_metric("wrike_comments_cache_miss")
     params: Dict[str, Any] = {}
     comments: List[Dict[str, Any]] = []
     next_token: Optional[str] = None
@@ -584,6 +751,7 @@ def fetch_wrike_comments(base_url: str, api_key: str, path: str) -> List[Dict[st
         next_token = data.get("nextPageToken")
         if not next_token:
             break
+    _wrike_cache_set("comments", cache_key, comments)
     return comments
 
 
@@ -650,36 +818,26 @@ def fetch_list_item_fields(
     if not token or not site_id or not list_id or not select_fields:
         return []
     headers = {"Authorization": f"Bearer {token}"}
-    next_link = f"{MS_GRAPH_BASE_URL}/sites/{site_id}/lists/{list_id}/items?$select=id&$top=200"
-    item_ids: List[str] = []
+    next_link = f"{MS_GRAPH_BASE_URL}/sites/{site_id}/lists/{list_id}/items"
+    params: Optional[Dict[str, Any]] = {
+        "$top": 200,
+        "$expand": "fields($select=" + ",".join(select_fields) + ")",
+    }
+    expanded: List[Dict[str, Any]] = []
     while next_link:
         try:
-            resp = requests.get(next_link, headers=headers)
+            resp = requests.get(next_link, headers=headers, params=params)
             resp.raise_for_status()
         except requests.RequestException as exc:  # noqa: BLE001
             log(f"List items fetch failed for {list_id}: {exc}")
             return []
         data = resp.json()
         for entry in data.get("value", []):
-            item_id = entry.get("id")
-            if item_id:
-                item_ids.append(item_id)
+            fields = entry.get("fields")
+            if fields:
+                expanded.append(fields)
         next_link = data.get("@odata.nextLink")
-
-    expanded = []
-    expand_value = "fields(select=" + ",".join(select_fields) + ")"
-    for item_id in item_ids:
-        detail_url = f"{MS_GRAPH_BASE_URL}/sites/{site_id}/lists/{list_id}/items/{item_id}"
-        detail_params = {"expand": expand_value}
-        try:
-            detail_resp = requests.get(detail_url, headers=headers, params=detail_params)
-            detail_resp.raise_for_status()
-        except requests.RequestException as exc:  # noqa: BLE001
-            log(f"List item fields fetch failed for {list_id}#{item_id}: {exc}")
-            continue
-        fields = detail_resp.json().get("fields")
-        if fields:
-            expanded.append(fields)
+        params = None
     return expanded
 
 
@@ -777,19 +935,17 @@ def clear_wrike_cache() -> None:
     fetch_tasks_for_project.clear()
     fetch_projects_with_customfields.clear()
     fetch_core_project_tasks.clear()
-    fetch_wrike_comments.clear()
-    fetch_graph_token.clear()
-    fetch_sharepoint_site_id.clear()
-    fetch_list_item_fields.clear()
-    graph_search_pdf.clear()
-    st.session_state.pop("solidworks_item_cache", None)
-    st.session_state.pop("solidworks_order_pdf_cache", None)
-    st.session_state.pop("solidworks_cache_loaded", None)
+    st.session_state.pop("wrike_comments_cache", None)
+    st.session_state.pop("wrike_data_cache", None)
+    st.session_state.pop("wrike_cache_loaded", None)
+    st.session_state.pop("kpi_aggregate_cache", None)
     try:
-        if SOLIDWORKS_CACHE_FILE.exists():
-            SOLIDWORKS_CACHE_FILE.unlink()
+        if WRIKE_COMMENTS_CACHE_FILE.exists():
+            WRIKE_COMMENTS_CACHE_FILE.unlink()
+        if WRIKE_DATA_CACHE_FILE.exists():
+            WRIKE_DATA_CACHE_FILE.unlink()
     except OSError as exc:
-        log(f"Failed to clear Solidworks disk cache: {exc}")
+        log(f"Failed to clear Wrike disk cache: {exc}")
 
 
 # ---- Aggregation -----------------------------------------------------------
@@ -894,8 +1050,10 @@ def aggregate_core_items(
     lookup = project_lookup or {}
     extra_alloc_by_project = extra_alloc_by_project or {}
     extra_used_by_project = extra_used_by_project or {}
+    solidworks_cache_dirty = False
 
     def annotate_solidworks(item_id: str, is_task_item: bool) -> Tuple[Optional[str], List[str]]:
+        nonlocal solidworks_cache_dirty
         if not wrike_base_url or not wrike_api_key:
             return None, []
         item_cache = _solidworks_item_cache()
@@ -915,7 +1073,7 @@ def aggregate_core_items(
         numbers = extract_solidworks_numbers(comments)
         if not numbers:
             item_cache[cache_key] = {"signature": signature, "text": None, "pdf_urls": []}
-            persist_solidworks_cache()
+            solidworks_cache_dirty = True
             return None, []
         entries: List[str] = []
         unique_pdf_urls: List[str] = []
@@ -926,7 +1084,7 @@ def aggregate_core_items(
                 if order_id and solidworks_context.graph_token:
                     if order_id not in order_pdf_cache:
                         order_pdf_cache[order_id] = graph_search_pdf(solidworks_context.graph_token, order_id)
-                        persist_solidworks_cache()
+                        solidworks_cache_dirty = True
                     pdf_url = order_pdf_cache[order_id]
                     if pdf_url:
                         label = f"{number} (SPEC)"
@@ -941,7 +1099,7 @@ def aggregate_core_items(
             "text": text_value,
             "pdf_urls": unique_pdf_urls,
         }
-        persist_solidworks_cache()
+        solidworks_cache_dirty = True
         return text_value, unique_pdf_urls
 
     def parent_ids(task: Dict[str, Any]) -> Iterable[str]:
@@ -1075,6 +1233,8 @@ def aggregate_core_items(
         }
         if planned_hours is None:
             base_row["warnings"].append("Brak Planned effort")
+        if not base_row["warnings"]:
+            base_row["warnings"] = None
 
         is_task_item = ctype == core_task_type
         solidworks_text, solidworks_pdf_urls = annotate_solidworks(tid, is_task_item)
@@ -1179,6 +1339,9 @@ def aggregate_core_items(
         )),
         "used_until_yesterday": used_sum,
     }
+
+    if solidworks_cache_dirty:
+        persist_solidworks_cache()
 
     return project_df, task_df, summary
 
@@ -1290,6 +1453,7 @@ def expand_dynamic_spec_columns(
 def main() -> None:
     st.set_page_config(page_title="Wrike KPI – Core Items", layout="wide")
     reset_logs()
+    reset_perf_metrics()
     st.title("Design Department KPI Board")
 
     with st.sidebar:
@@ -1304,8 +1468,11 @@ def main() -> None:
         st.caption("Parametry są też ładowane z .env; tu możesz je nadpisać.")
         if "refresh_timestamp" not in st.session_state:
             st.session_state["refresh_timestamp"] = None
+        if "refresh_nonce" not in st.session_state:
+            st.session_state["refresh_nonce"] = 0
         if st.button("Odśwież dane z Wrike", key="refresh"):
             clear_wrike_cache()
+            st.session_state["refresh_nonce"] += 1
             st.session_state["refresh_timestamp"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         if st.session_state["refresh_timestamp"]:
             st.caption(f"Ostatnie odświeżenie: {st.session_state['refresh_timestamp']}")
@@ -1314,9 +1481,12 @@ def main() -> None:
         st.warning("Uzupełnij API key i ID folderu z projektami, aby pobrać dane.")
         return
 
+    graph_t0 = time.perf_counter()
     solidworks_context = prepare_solidworks_context()
+    _set_stage_time("graph", time.perf_counter() - graph_t0)
 
     # Step 1: projekty klienckie
+    wrike_t0 = time.perf_counter()
     try:
         projects = fetch_client_projects(base_url, api_key, client_folder)
     except Exception as exc:  # noqa: BLE001
@@ -1327,7 +1497,7 @@ def main() -> None:
     if not project_map:
         st.info("Brak dostępnych projektów w zdefiniowanym folderze.")
         return
-    default_selection = [next(iter(project_map.keys()))]
+    default_selection: List[str] = []
     selected_projects = st.multiselect(
         "Wybierz projekt(y):",
         options=list(project_map.keys()),
@@ -1382,26 +1552,47 @@ def main() -> None:
         except Exception as exc:  # noqa: BLE001
             st.error(str(exc))
             return
+    _set_stage_time("wrike_fetch", time.perf_counter() - wrike_t0)
 
     if not tasks:
         st.info("Brak tasków w wybranych projektach.")
         return
 
     # Step 3-5: KPI + drzewo
-    project_df, task_df, summary = aggregate_core_items(
-        tasks,
-        core_task_type=core_task_type,
-        core_project_type=core_project_type,
-        planned_field_id=planned_field_id,
-        completed_status_id=completed_status_id,
-        project_lookup=project_map,
-        allowed_project_ids=set(selected_projects),
-        extra_alloc_by_project=extra_alloc_by_project,
-        extra_used_by_project=extra_used_by_project,
-        wrike_base_url=base_url,
-        wrike_api_key=api_key,
-        solidworks_context=solidworks_context,
+    agg_cache_key = json.dumps(
+        {
+            "selected_projects": sorted(selected_projects),
+            "refresh_nonce": st.session_state.get("refresh_nonce", 0),
+            "core_project_type": core_project_type,
+            "core_task_type": core_task_type,
+            "planned_field_id": planned_field_id,
+            "completed_status_id": completed_status_id,
+        },
+        sort_keys=True,
     )
+    aggregate_t0 = time.perf_counter()
+    cached_agg = _kpi_aggregate_get(agg_cache_key)
+    if cached_agg is not None:
+        _inc_perf_metric("kpi_aggregate_cache_hit")
+        project_df, task_df, summary = cached_agg
+    else:
+        _inc_perf_metric("kpi_aggregate_cache_miss")
+        project_df, task_df, summary = aggregate_core_items(
+            tasks,
+            core_task_type=core_task_type,
+            core_project_type=core_project_type,
+            planned_field_id=planned_field_id,
+            completed_status_id=completed_status_id,
+            project_lookup=project_map,
+            allowed_project_ids=set(selected_projects),
+            extra_alloc_by_project=extra_alloc_by_project,
+            extra_used_by_project=extra_used_by_project,
+            wrike_base_url=base_url,
+            wrike_api_key=api_key,
+            solidworks_context=solidworks_context,
+        )
+        _kpi_aggregate_set(agg_cache_key, project_df, task_df, summary)
+    _set_stage_time("aggregate", time.perf_counter() - aggregate_t0)
     project_df, task_df, spec_col_count = expand_dynamic_spec_columns(project_df, task_df)
     core_cols = [
         ("type", "Type"),
@@ -1475,6 +1666,17 @@ def main() -> None:
     )
     with st.expander("Log (debug)"):
         _init_logs()
+        _init_perf_metrics()
+        st.write("Cache metrics:")
+        st.json(
+            {
+                "wrike_comments_cache_hit": st.session_state["perf_metrics"].get("wrike_comments_cache_hit", 0),
+                "wrike_comments_cache_miss": st.session_state["perf_metrics"].get("wrike_comments_cache_miss", 0),
+                "kpi_aggregate_cache_hit": st.session_state["perf_metrics"].get("kpi_aggregate_cache_hit", 0),
+                "kpi_aggregate_cache_miss": st.session_state["perf_metrics"].get("kpi_aggregate_cache_miss", 0),
+                "stage_times_sec": st.session_state["perf_metrics"].get("stage_times", {}),
+            }
+        )
         st.write("\n".join(st.session_state["logs"]))
 
     def color_ratio(val):
