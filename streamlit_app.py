@@ -560,21 +560,25 @@ def render_df(
                 raise KeyError(f"{column} is not in DataFrame columns")
             ordered_cols.append(column)
             if label and column not in final_config:
-                label_config[column] = st.column_config.TextColumn(label)
+                first_val = df_local[column].dropna().iloc[0] if not df_local[column].dropna().empty else None
+                if isinstance(first_val, (date, datetime)):
+                    label_config[column] = st.column_config.DateColumn(label, format="DD.MM.YYYY")
+                else:
+                    label_config[column] = st.column_config.TextColumn(label)
         final_config = {**final_config, **label_config}
         st.dataframe(
             df_local[ordered_cols]
-            .style.applymap(color_ratio, subset=["alloc_vs_plan_pct"])
-            .applymap(color_time, subset=["time_progress_pct"])
+            .style.map(color_ratio, subset=["alloc_vs_plan_pct"])
+            .map(color_time, subset=["time_progress_pct"])
             .format(fmt),
-            use_container_width=True,
+            width='stretch',
             column_config=final_config,
         )
     except Exception as exc:  # noqa: BLE001
         log(f"Styler failed, showing plain dataframe. Error: {exc}")
         st.dataframe(
             df_local[ordered_cols],
-            use_container_width=True,
+            width='stretch',
             column_config=final_config,
         )
 
@@ -1749,7 +1753,7 @@ def main() -> None:
                         ),
                     },
                     hide_index=True,
-                    use_container_width=True,
+                    width='stretch',
                 )
 
         with st.expander("Log (debug)"):
