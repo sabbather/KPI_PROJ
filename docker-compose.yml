@@ -1,0 +1,14 @@
+services:
+  streamlit:
+    build: .
+    container_name: kpi-report
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - cache_data:/app/.cache
+
+volumes:
+  cache_data:

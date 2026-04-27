@@ -1,0 +1,13 @@
+__pycache__/
+.venv/
+.cache/
+.git/
+.gitignore
+.gitattributes
+.dockerignore
+.env
+.env.example
+trashbin/
+*.ps1
+*.md
+test.py
