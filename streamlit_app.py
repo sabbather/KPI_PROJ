@@ -1481,11 +1481,39 @@ def expand_dynamic_spec_columns(
     return apply(project_df), apply(task_df), max_specs
 
 
+# ---- Auth --------------------------------------------------------------------
+APP_USER = os.getenv("KPI_USERNAME", "admin")
+APP_PASS = os.getenv("KPI_PASSWORD", "kpi2024")
+
+
+def check_password() -> None:
+    if st.session_state.get("authenticated"):
+        return
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.title("Design Department KPI Board")
+        with st.form("login_form"):
+            st.text_input("Login", key="login_user")
+            st.text_input("Hasło", type="password", key="login_pass")
+            if st.form_submit_button("Zaloguj"):
+                if (
+                    st.session_state.login_user == APP_USER
+                    and st.session_state.login_pass == APP_PASS
+                ):
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Nieprawidłowy login lub hasło")
+    st.stop()
+
+
 # ---- UI --------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title="Wrike KPI – Core Items", layout="wide")
     reset_logs()
     reset_perf_metrics()
+    check_password()
     st.title("Design Department KPI Board")
 
     st.session_state.setdefault("page", "KPI Dashboard")
