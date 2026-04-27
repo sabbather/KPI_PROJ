@@ -1729,11 +1729,11 @@ def main() -> None:
                     )
                     .sort_values(["date", "project", "title"])
                 )
-                detail["date"] = pd.to_datetime(detail["date"])
+                detail["date"] = pd.to_datetime(detail["date"]).dt.strftime("%Y-%m-%d")
                 st.dataframe(
                     detail,
                     column_config={
-                        "date": st.column_config.DateColumn("Date", format="YYYY-MM-DD"),
+                        "date": "Date",
                         "project": "Client Project",
                         "title": "Core Item",
                         "type": "Type",
