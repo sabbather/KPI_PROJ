@@ -1723,14 +1723,17 @@ def main() -> None:
                     filtered_df.groupby(
                         ["date", "project", "title", "type"], as_index=False
                     )
-                    .agg({"planned_hours": "first", "daily_hours": "sum"})
+                    .agg(
+                        planned_hours=("planned_hours", "first"),
+                        daily_hours=("daily_hours", "sum"),
+                    )
                     .sort_values(["date", "project", "title"])
                 )
-                detail["date"] = detail["date"].apply(lambda d: d.strftime("%Y-%m-%d"))
+                detail["date"] = pd.to_datetime(detail["date"])
                 st.dataframe(
                     detail,
                     column_config={
-                        "date": "Date",
+                        "date": st.column_config.DateColumn("Date", format="YYYY-MM-DD"),
                         "project": "Client Project",
                         "title": "Core Item",
                         "type": "Type",
