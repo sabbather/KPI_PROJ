@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
     volumes:
       - cache_data:/app/.cache
 
