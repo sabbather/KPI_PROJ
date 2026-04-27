@@ -470,6 +470,38 @@ def due_symbol(due_flag: Any, completed_flag: Any, completed_date: Any, due_date
     return bool_symbol(due_flag)
 
 
+def compute_daily_allocated_effort(df: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict] = []
+    for _, row in df.iterrows():
+        start = row.get("start_date")
+        due = row.get("due_date")
+        planned = row.get("planned_hours")
+        if pd.isna(start) or pd.isna(due) or pd.isna(planned) or planned <= 0:
+            continue
+        if not isinstance(start, date) or not isinstance(due, date):
+            continue
+        if due < start:
+            continue
+        wdays = [
+            start + timedelta(days=i)
+            for i in range((due - start).days + 1)
+            if (start + timedelta(days=i)).weekday() < 5
+        ]
+        if not wdays:
+            continue
+        daily = planned / len(wdays)
+        for d in wdays:
+            rows.append({
+                "date": d,
+                "project": row.get("project", ""),
+                "title": row.get("title", ""),
+                "type": row.get("type", ""),
+                "planned_hours": planned,
+                "daily_hours": round(daily, 2),
+            })
+    return pd.DataFrame(rows)
+
+
 def render_df(
     df: pd.DataFrame,
     cols: list[str | tuple[str, str]],
@@ -1456,7 +1488,16 @@ def main() -> None:
     reset_perf_metrics()
     st.title("Design Department KPI Board")
 
+    st.session_state.setdefault("page", "KPI Dashboard")
+
     with st.sidebar:
+        page = st.radio(
+            "Widok",
+            ["KPI Dashboard", "Daily Allocated Effort"],
+            index=0 if st.session_state.get("page") == "KPI Dashboard" else 1,
+        )
+        st.session_state["page"] = page
+        st.divider()
         st.header("Konfiguracja")
         base_url = st.text_input("Wrike API base URL", value=DEFAULT_BASE_URL)
         api_key = st.text_input("API key", value=DEFAULT_API_KEY or "", type="password")
@@ -1594,6 +1635,114 @@ def main() -> None:
         _kpi_aggregate_set(agg_cache_key, project_df, task_df, summary)
     _set_stage_time("aggregate", time.perf_counter() - aggregate_t0)
     project_df, task_df, spec_col_count = expand_dynamic_spec_columns(project_df, task_df)
+    if st.session_state["page"] == "Daily Allocated Effort":
+        st.subheader("Daily Allocated Effort")
+        st.caption(
+            "Obciążenie dzienne na podstawie planned_hours "
+            "rozłożonych równo na dni robocze (pon-pt)"
+        )
+
+        core_df = pd.concat([project_df, task_df], ignore_index=True)
+        daily_df = compute_daily_allocated_effort(core_df)
+
+        if daily_df.empty:
+            st.info(
+                "Brak danych – żaden core item nie ma jednocześnie "
+                "planned_hours > 0 oraz obu dat (start, due) w dniach roboczych."
+            )
+        else:
+            min_date = daily_df["date"].min()
+            max_date = daily_df["date"].max()
+
+            date_range = st.date_input(
+                "Zakres dat",
+                value=(min_date, max_date),
+                min_value=min_date,
+                max_value=max_date,
+            )
+            if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
+                start_filter, end_filter = date_range
+            else:
+                start_filter, end_filter = min_date, max_date
+
+            filtered_df = daily_df[
+                (daily_df["date"] >= start_filter) & (daily_df["date"] <= end_filter)
+            ]
+
+            if filtered_df.empty:
+                st.info("Brak danych w wybranym zakresie dat.")
+            else:
+                total_h = filtered_df["daily_hours"].sum()
+                n_dates = filtered_df["date"].nunique()
+                n_items = filtered_df["title"].nunique()
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Suma godzin", f"{total_h:.1f}")
+                c2.metric("Dni roboczych", n_dates)
+                c3.metric("Core itemów", n_items)
+
+                st.subheader("Obciążenie dzienne wg projektu klienckiego")
+                pivot = filtered_df.pivot_table(
+                    index="date",
+                    columns="project",
+                    values="daily_hours",
+                    aggfunc="sum",
+                    fill_value=0,
+                )
+                st.bar_chart(pivot)
+
+                st.subheader("Szczegóły")
+                detail = (
+                    filtered_df.groupby(
+                        ["date", "project", "title", "type"], as_index=False
+                    )
+                    .agg({"planned_hours": "first", "daily_hours": "sum"})
+                    .sort_values(["date", "project", "title"])
+                )
+                detail["date"] = detail["date"].apply(lambda d: d.strftime("%Y-%m-%d"))
+                st.dataframe(
+                    detail,
+                    column_config={
+                        "date": "Date",
+                        "project": "Client Project",
+                        "title": "Core Item",
+                        "type": "Type",
+                        "planned_hours": st.column_config.NumberColumn(
+                            "Planned (h)", format="%.0f"
+                        ),
+                        "daily_hours": st.column_config.NumberColumn(
+                            "Daily (h)", format="%.2f"
+                        ),
+                    },
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+        with st.expander("Log (debug)"):
+            _init_logs()
+            _init_perf_metrics()
+            st.write("Cache metrics:")
+            st.json(
+                {
+                    "wrike_comments_cache_hit": st.session_state["perf_metrics"].get(
+                        "wrike_comments_cache_hit", 0
+                    ),
+                    "wrike_comments_cache_miss": st.session_state["perf_metrics"].get(
+                        "wrike_comments_cache_miss", 0
+                    ),
+                    "kpi_aggregate_cache_hit": st.session_state["perf_metrics"].get(
+                        "kpi_aggregate_cache_hit", 0
+                    ),
+                    "kpi_aggregate_cache_miss": st.session_state["perf_metrics"].get(
+                        "kpi_aggregate_cache_miss", 0
+                    ),
+                    "stage_times_sec": st.session_state["perf_metrics"].get(
+                        "stage_times", {}
+                    ),
+                }
+            )
+            st.write("\n".join(st.session_state["logs"]))
+        return
+
     core_cols = [
         ("type", "Type"),
         ("project", "Project"),
@@ -1678,31 +1827,6 @@ def main() -> None:
             }
         )
         st.write("\n".join(st.session_state["logs"]))
-
-    def color_ratio(val):
-        if pd.isna(val):
-            return ""
-        if val <= 80:
-            return "background-color:#2e7d32; color:#ffffff"  # dark green, white text
-        if val <= 110:
-            return "background-color:#f9a825; color:#000000"  # amber, black text
-        return "background-color:#c62828; color:#ffffff"      # dark red, white text
-
-    def color_time(val):
-        if pd.isna(val):
-            return ""
-        if val <= 60:
-            return "background-color:#2e7d32; color:#ffffff"  # green
-        if val <= 100:
-            return "background-color:#f9a825; color:#000000"  # amber
-        return "background-color:#c62828; color:#ffffff"      # red (przekroczony harmonogram)
-
-    def bool_symbol(val: Any) -> str:
-        if val is True:
-            return "✅"
-        if val is False:
-            return "🔴"
-        return ""
 
 if __name__ == "__main__":
     main()
