@@ -493,6 +493,7 @@ def compute_daily_allocated_effort(df: pd.DataFrame) -> pd.DataFrame:
         for d in wdays:
             rows.append({
                 "date": d,
+                "date_str": d.strftime("%Y-%m-%d"),
                 "project": row.get("project", ""),
                 "title": row.get("title", ""),
                 "type": row.get("type", ""),
@@ -1721,19 +1722,18 @@ def main() -> None:
                 st.subheader("Szczegóły")
                 detail = (
                     filtered_df.groupby(
-                        ["date", "project", "title", "type"], as_index=False
+                        ["date_str", "project", "title", "type"], as_index=False
                     )
                     .agg(
                         planned_hours=("planned_hours", "first"),
                         daily_hours=("daily_hours", "sum"),
                     )
-                    .sort_values(["date", "project", "title"])
+                    .sort_values(["date_str", "project", "title"])
                 )
-                detail["date"] = pd.to_datetime(detail["date"]).dt.strftime("%Y-%m-%d")
                 st.dataframe(
                     detail,
                     column_config={
-                        "date": "Date",
+                        "date_str": "Date",
                         "project": "Client Project",
                         "title": "Core Item",
                         "type": "Type",
