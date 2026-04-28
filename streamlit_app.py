@@ -27,6 +27,7 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
+import altair as alt
 import pandas as pd
 import requests
 import streamlit as st
@@ -64,6 +65,7 @@ KPI_AGG_CACHE_TTL_SEC = int(os.getenv("KPI_AGG_CACHE_TTL_SEC", "3600"))
 SOLIDWORKS_CACHE_FILE = Path(".cache") / "solidworks_cache.json"
 WRIKE_COMMENTS_CACHE_FILE = Path(".cache") / "wrike_comments_cache.json"
 WRIKE_DATA_CACHE_FILE = Path(".cache") / "wrike_data_cache.json"
+TEAM_EFFORT_FILE = Path(".cache") / "team_effort.json"
 
 
 # ---- Logging ---------------------------------------------------------------
@@ -496,7 +498,6 @@ def compute_daily_allocated_effort(df: pd.DataFrame) -> pd.DataFrame:
                 "date_str": d.strftime("%d.%m.%Y"),
                 "project": row.get("project", ""),
                 "title": row.get("title", ""),
-                "type": row.get("type", ""),
                 "planned_hours": planned,
                 "daily_hours": round(daily, 2),
             })
@@ -1064,7 +1065,7 @@ def aggregate_core_items(
     wrike_api_key: Optional[str] = None,
     solidworks_context: Optional[SolidworksContext] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
-    tasks_by_id, _ = build_indexes(tasks)
+    tasks_by_id, children = build_indexes(tasks)
     nearest_core_task, nearest_core_project = make_nearest_core_resolvers(
         tasks_by_id,
         core_task_type,
@@ -1082,7 +1083,28 @@ def aggregate_core_items(
     used_minutes_by_task = {tid: effort_minutes_until(task, cutoff_date) for tid, task in tasks_by_id.items()}
     planned_seen = 0
     customfields_seen = 0
-    planned_projects_sum = 0  # planned effort z projektów (core i zwykłych)
+
+    # Pre-compute raw planned hours (before netting) for all tasks
+    raw_planned_by_task: Dict[str, Optional[float]] = {}
+    for tid, task in tasks_by_id.items():
+        raw_planned_by_task[tid] = extract_planned_hours(task, planned_field_id)
+
+    # Cascading netting: net = max(0, raw - sum(net of children))
+    @lru_cache(maxsize=None)
+    def compute_netted_planned(tid: str) -> Optional[float]:
+        raw = raw_planned_by_task.get(tid)
+        if raw is None:
+            return None
+        child_sum = 0.0
+        for child_id in children.get(tid, []):
+            child_net = compute_netted_planned(child_id)
+            if child_net is not None:
+                child_sum += child_net
+        return max(0.0, raw - child_sum)
+
+    netted_planned_by_task: Dict[str, Optional[float]] = {}
+    for tid in tasks_by_id:
+        netted_planned_by_task[tid] = compute_netted_planned(tid)
 
     lookup = project_lookup or {}
     extra_alloc_by_project = extra_alloc_by_project or {}
@@ -1210,14 +1232,14 @@ def aggregate_core_items(
 
     for tid, task in tasks_by_id.items():
         ctype = task.get("customItemTypeId") or task.get("entityTypeId")
-        planned_hours = extract_planned_hours(task, planned_field_id)
-        if planned_hours is not None:
-            planned_hours = int(round(planned_hours))
+        raw_planned = raw_planned_by_task.get(tid)
         if task.get("customFields"):
             customfields_seen += 1
-        if planned_hours is not None:
+        if raw_planned is not None:
             planned_seen += 1
-        is_project = bool(task.get("project") or task.get("scope") == "WsProject")
+        planned_hours = netted_planned_by_task.get(tid)
+        if planned_hours is not None:
+            planned_hours = int(round(planned_hours))
         project_id, project_title = resolve_client_project(task)
         task_title = task.get("title")
         if allowed_project_ids is not None and (not project_id or project_id not in allowed_project_ids):
@@ -1225,8 +1247,6 @@ def aggregate_core_items(
         is_skipped_project = ctype == core_project_type and task_title in SKIPPED_CORE_PROJECT_TITLES
         if is_skipped_project:
             continue
-        if is_project and planned_hours:
-            planned_projects_sum += planned_hours
         if ctype not in {core_task_type, core_project_type}:
             continue
         start = iso_to_date(
@@ -1250,7 +1270,6 @@ def aggregate_core_items(
                 elapsed = (min(reference_date, due) - start).days
                 time_progress = int(round(elapsed / span * 100))
 
-        item_type_label = "Core task" if ctype == core_task_type else "Core project"
         base_row = {
             "id": tid,
             "title": task.get("title", "(brak tytułu)"),
@@ -1283,7 +1302,6 @@ def aggregate_core_items(
             base_row["allocated_hours"] = round(alloc_minutes / 60)
             used_minutes = sum_used(nearest_core_task, tid, include_self=True)
             base_row["used_hours_until_yesterday"] = minutes_to_hours(used_minutes)
-            base_row["type"] = item_type_label
             core_task_rows.append(base_row)
         else:
             extra_alloc = extra_alloc_by_project.get(tid, 0)
@@ -1292,7 +1310,6 @@ def aggregate_core_items(
             extra_used = extra_used_by_project.get(tid, 0)
             used_minutes = sum_used(nearest_core_project, tid, include_self=False) + extra_used
             base_row["used_hours_until_yesterday"] = minutes_to_hours(used_minutes)
-            base_row["type"] = item_type_label
             core_project_rows.append(base_row)
 
     task_df = pd.DataFrame(core_task_rows)
@@ -1351,7 +1368,7 @@ def aggregate_core_items(
 
     summary = {
         "allocated_hours": int(round(alloc_total.sum())),
-        "planned_hours": int(round(planned_projects_sum)),
+        "planned_hours": int(round(planned_total.sum())),
         "planned_missing": int(planned_total.isna().sum()),
         "completed_due": completed,
         "due_total": due_total,
@@ -1497,7 +1514,7 @@ def check_password() -> None:
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.title("Design Department KPI Board")
+        st.title("KPI DASHBOARD")
         with st.form("login_form"):
             st.text_input("Login", key="login_user")
             st.text_input("Hasło", type="password", key="login_pass")
@@ -1519,27 +1536,27 @@ def main() -> None:
     reset_logs()
     reset_perf_metrics()
     check_password()
-    st.title("Design Department KPI Board")
+    st.title("KPI DASHBOARD")
 
-    st.session_state.setdefault("page", "KPI Dashboard")
+    st.session_state.setdefault("page", "KPI DASHBOARD")
 
     with st.sidebar:
         page = st.radio(
             "Widok",
-            ["KPI Dashboard", "Daily Allocated Effort"],
-            index=0 if st.session_state.get("page") == "KPI Dashboard" else 1,
+            ["KPI DASHBOARD", "DAILY PLANNED EFFORT"],
+            index=0 if st.session_state.get("page") == "KPI DASHBOARD" else 1,
         )
         st.session_state["page"] = page
         st.divider()
         st.header("Konfiguracja")
-        base_url = st.text_input("Wrike API base URL", value=DEFAULT_BASE_URL)
-        api_key = st.text_input("API key", value=DEFAULT_API_KEY or "", type="password")
-        client_folder = st.text_input("Folder ID z projektami klienckimi", value=DEFAULT_CLIENT_FOLDER)
-        core_project_type = st.text_input("CustomItemTypeId – Core project", value=DEFAULT_CORE_PROJECT_TYPE)
-        core_task_type = st.text_input("CustomItemTypeId – Core task", value=DEFAULT_CORE_TASK_TYPE)
-        planned_field_id = st.text_input("CustomFieldId – Planned effort (godz.)", value=DEFAULT_PLANNED_FIELD_ID)
-        completed_status_id = st.text_input("CustomStatusId – status Completed", value=DEFAULT_COMPLETED_STATUS_ID)
-        st.caption("Parametry są też ładowane z .env; tu możesz je nadpisać.")
+        base_url = DEFAULT_BASE_URL
+        api_key = DEFAULT_API_KEY
+        client_folder = DEFAULT_CLIENT_FOLDER
+        core_project_type = DEFAULT_CORE_PROJECT_TYPE
+        core_task_type = DEFAULT_CORE_TASK_TYPE
+        planned_field_id = DEFAULT_PLANNED_FIELD_ID
+        completed_status_id = DEFAULT_COMPLETED_STATUS_ID
+        st.caption("Parametry ładowane z .env.")
         if "refresh_timestamp" not in st.session_state:
             st.session_state["refresh_timestamp"] = None
         if "refresh_nonce" not in st.session_state:
@@ -1587,7 +1604,6 @@ def main() -> None:
     cutoff_date = date.today() - timedelta(days=1)
     extra_alloc_by_project: Dict[str, int] = defaultdict(int)
     extra_used_by_project: Dict[str, int] = defaultdict(int)
-    cutoff_date = date.today() - timedelta(days=1)
     core_project_ids: Set[str] = set()
     with st.spinner("Pobieram taski projektu z Wrike..."):
         try:
@@ -1604,25 +1620,8 @@ def main() -> None:
                     task["_selected_project_id"] = pid
                     tasks.append(task)
                     existing_ids.add(tid)
-                project_items = fetch_projects_with_customfields(base_url, api_key, pid)
-                for item in project_items:
-                    item.setdefault("customItemTypeId", core_project_type)
-                    item.setdefault("entityTypeId", "WsProject")
-                    tid = item.get("id")
-                    if not tid or tid in existing_ids:
-                        continue
-                    core_project_ids.add(tid)
-                    item["_selected_project_id"] = pid
-                    tasks.append(item)
-                    existing_ids.add(tid)
-            for cp_id in core_project_ids:
-                extra_tasks = fetch_core_project_tasks(base_url, api_key, cp_id)
-                for task in extra_tasks:
-                    tid = task.get("id")
-                    if not tid:
-                        continue
-                    extra_alloc_by_project[cp_id] += allocated_minutes(task)
-                    extra_used_by_project[cp_id] += effort_minutes_until(task, cutoff_date)
+                # Core projects removed – fetch_projects_with_customfields skipped
+            # Core project extra tasks skipped
         except Exception as exc:  # noqa: BLE001
             st.error(str(exc))
             return
@@ -1668,8 +1667,8 @@ def main() -> None:
         _kpi_aggregate_set(agg_cache_key, project_df, task_df, summary)
     _set_stage_time("aggregate", time.perf_counter() - aggregate_t0)
     project_df, task_df, spec_col_count = expand_dynamic_spec_columns(project_df, task_df)
-    if st.session_state["page"] == "Daily Allocated Effort":
-        st.subheader("Daily Allocated Effort")
+    if st.session_state["page"] == "DAILY PLANNED EFFORT":
+        st.subheader("DAILY PLANNED EFFORT")
         st.caption(
             "Obciążenie dzienne na podstawie planned_hours "
             "rozłożonych równo na dni robocze (pon-pt)"
@@ -1686,10 +1685,11 @@ def main() -> None:
         else:
             min_date = daily_df["date"].min()
             max_date = daily_df["date"].max()
+            default_start = max(min_date, date.today() - timedelta(days=7))
 
             date_range = st.date_input(
                 "Zakres dat",
-                value=(min_date, max_date),
+                value=(default_start, max_date),
                 min_value=min_date,
                 max_value=max_date,
             )
@@ -1705,15 +1705,24 @@ def main() -> None:
             if filtered_df.empty:
                 st.info("Brak danych w wybranym zakresie dat.")
             else:
+                st.session_state.setdefault("team_effort", _read_json_file(TEAM_EFFORT_FILE, 0))
+                prev_effort = st.session_state["team_effort"]
+                team_effort = st.number_input("Team Effort (h)", min_value=0, value=prev_effort, step=1)
+                if team_effort != prev_effort:
+                    st.session_state["team_effort"] = team_effort
+                    _write_json_file(TEAM_EFFORT_FILE, team_effort)
+
                 total_h = filtered_df["daily_hours"].sum()
                 n_dates = filtered_df["date"].nunique()
                 n_items = filtered_df["title"].nunique()
+                workdays_in_range = int(pd.bdate_range(start_filter, end_filter).size) if team_effort > 0 else 0
+                available_h = team_effort * workdays_in_range
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Suma godzin", f"{total_h:.1f}")
+                c1.metric("Suma / dostępne godz.", f"{total_h:.0f} / {available_h:.0f}")
                 c2.metric("Dni roboczych", n_dates)
                 c3.metric("Core itemów", n_items)
 
-                st.subheader("Obciążenie dzienne wg projektu klienckiego")
+                st.subheader("Planned effort visualisation")
                 pivot = filtered_df.pivot_table(
                     index="date",
                     columns="project",
@@ -1721,12 +1730,22 @@ def main() -> None:
                     aggfunc="sum",
                     fill_value=0,
                 )
-                st.bar_chart(pivot)
+                long_chart = pivot.reset_index().melt(id_vars=["date"], var_name="project", value_name="daily_hours")
+                bars = alt.Chart(long_chart).mark_bar().encode(
+                    x=alt.X("date:T", title="Date"),
+                    y=alt.Y("daily_hours:Q", title="Godziny"),
+                    color=alt.Color("project:N", title="Project"),
+                )
+                chart = bars
+                if team_effort > 0:
+                    rule = alt.Chart(pd.DataFrame({"y": [team_effort]})).mark_rule(color="red", strokeWidth=2).encode(y="y")
+                    chart = bars + rule
+                st.altair_chart(chart.properties(width="container"), use_container_width=True)
 
                 st.subheader("Szczegóły")
                 detail = (
                     filtered_df.groupby(
-                        ["date", "project", "title", "type"], as_index=False
+                        ["date", "project", "title"], as_index=False
                     )
                     .agg(
                         planned_hours=("planned_hours", "first"),
@@ -1744,7 +1763,6 @@ def main() -> None:
                         "date_str": "Date",
                         "project": "Client Project",
                         "title": "Core Item",
-                        "type": "Type",
                         "planned_hours": st.column_config.NumberColumn(
                             "Planned (h)", format="%.0f"
                         ),
@@ -1783,7 +1801,6 @@ def main() -> None:
         return
 
     core_cols = [
-        ("type", "Type"),
         ("project", "Project"),
         ("title", "Title"),
         ("solidworks", "SOLIDWORKS"),
@@ -1806,7 +1823,7 @@ def main() -> None:
     def render_kpi_block(summary: Dict[str, Any], completion_label: str) -> None:
         col1, col2, col3 = st.columns(3)
         ratio_total_inner = (
-            round(summary["allocated_hours"] / summary["planned_hours"] * 100, 1)
+            round(summary["allocated_hours"] / summary["planned_hours"] * 100)
             if summary["planned_hours"] > 0
             else None
         )
