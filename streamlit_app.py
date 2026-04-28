@@ -1588,10 +1588,11 @@ def main() -> None:
     if not project_map:
         st.info("Brak dostępnych projektów w zdefiniowanym folderze.")
         return
+    sorted_project_ids = sorted(project_map.keys(), key=lambda pid: project_map[pid].casefold())
     default_selection: List[str] = []
     selected_projects = st.multiselect(
         "Wybierz projekt(y):",
-        options=list(project_map.keys()),
+        options=sorted_project_ids,
         default=default_selection,
         format_func=lambda pid: project_map[pid],
     )
