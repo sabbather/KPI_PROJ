@@ -1402,6 +1402,8 @@ def main() -> None:
         st.divider()
         st.radio("Filtruj zadania", ["ALL", "BOM"], horizontal=True, key="task_filter")
         st.radio("Status", ["ALL", "COMPLETED"], horizontal=True, key="status_filter")
+        kpi_date_from = st.date_input("KPI due od", value=None, key="kpi_date_from")
+        kpi_date_to = st.date_input("KPI due do", value=None, key="kpi_date_to")
         st.header("Konfiguracja")
         base_url = DEFAULT_BASE_URL
         api_key = DEFAULT_API_KEY
@@ -1665,33 +1667,76 @@ def main() -> None:
     for idx in range(spec_col_count):
         core_cols.insert(4 + idx, (f"solidworks_pdf_{idx + 1}", f"SPEC {idx + 1}"))
 
-    def render_kpi_block(summary: Dict[str, Any], completion_label: str) -> None:
-        col1, col2, col3 = st.columns(3)
-        ratio_total_inner = (
-            round(summary["allocated_hours"] / summary["planned_hours"] * 100)
-            if summary["planned_hours"] > 0
-            else None
-        )
-        completion_pct_inner = (
-            0
-            if summary["due_total"] == 0
-            else int(round((summary["completed_due"] / summary["due_total"]) * 100))
-        )
-        with col1:
-            st.metric("Allocated (h)", summary["allocated_hours"])
-            st.metric("Used until yesterday (h)", summary.get("used_until_yesterday", 0.0))
-            if ratio_total_inner is not None:
-                st.metric("Alloc / Planned", f"{ratio_total_inner}%")
-            if summary["time_progress_avg"]:
-                st.metric("Ścieżka czasu (avg)", f"{summary['time_progress_avg']}%")
-        col2.metric("Planned (h)", summary["planned_hours"], delta=f"braki: {summary['planned_missing']}")
-        col3.metric(
-            completion_label,
-            f"{summary['completed_due']} / {summary['due_total']}",
-            delta=f"{completion_pct_inner}%",
-        )
+    # ---- Date filter logic ----
+    date_filter_active = kpi_date_from is not None and kpi_date_to is not None
 
-    render_kpi_block(summary, "Zakończone / Planowane (BOM)")
+    def _filter_by_due(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty or "due_date" not in df.columns:
+            return df
+        return df[(df["due_date"] >= kpi_date_from) & (df["due_date"] <= kpi_date_to)]
+
+    if date_filter_active:
+        task_df_kpi = _filter_by_due(task_df)
+        bom_df_kpi = _filter_by_due(bom_df)
+    else:
+        task_df_kpi = task_df
+        bom_df_kpi = bom_df
+
+    # ---- KPI recalc ----
+    if date_filter_active:
+        planned_h = int(round(pd.concat(
+            [task_df_kpi.get("planned_hours", pd.Series(dtype=float)),
+             bom_df_kpi.get("planned_hours", pd.Series(dtype=float))], ignore_index=True).sum()))
+        alloc_h = int(round(pd.concat(
+            [task_df_kpi.get("allocated_hours", pd.Series(dtype=float)),
+             bom_df_kpi.get("allocated_hours", pd.Series(dtype=float))], ignore_index=True).sum()))
+        used_series = pd.concat(
+            [task_df_kpi.get("used_hours_until_yesterday", pd.Series(dtype=float)),
+             bom_df_kpi.get("used_hours_until_yesterday", pd.Series(dtype=float))], ignore_index=True).dropna()
+        used_h = int(used_series.sum()) if not used_series.empty else 0
+        planned_missing = int(pd.concat(
+            [task_df_kpi.get("planned_hours", pd.Series(dtype=float)),
+             bom_df_kpi.get("planned_hours", pd.Series(dtype=float))], ignore_index=True).isna().sum())
+        ratio_total = round(alloc_h / planned_h * 100) if planned_h > 0 else None
+    else:
+        planned_h = summary["planned_hours"]
+        alloc_h = summary["allocated_hours"]
+        used_h = summary.get("used_until_yesterday", 0)
+        planned_missing = summary["planned_missing"]
+        ratio_total = round(alloc_h / planned_h * 100) if planned_h > 0 else None
+
+    # KPI 1: Zakończone / Planowane (BOM)
+    if not bom_df_kpi.empty:
+        kpi1_completed = int(bom_df_kpi["completed"].sum())
+        kpi1_total = len(bom_df_kpi)
+    else:
+        kpi1_completed = 0
+        kpi1_total = 0
+    kpi1_pct = 0 if kpi1_total == 0 else int(round(kpi1_completed / kpi1_total * 100))
+    kpi1_val = round(kpi1_completed / kpi1_total, 2) if kpi1_total > 0 else 0.0
+
+    # KPI 2: avg alloc/planned for completed BOM / 100
+    completed_bom = bom_df_kpi[bom_df_kpi["completed"] == True] if not bom_df_kpi.empty and "completed" in bom_df_kpi else pd.DataFrame()
+    if not completed_bom.empty:
+        ratios = completed_bom["allocated_hours"] / completed_bom["planned_hours"]
+        ratios = ratios.replace([float("inf"), float("-inf")], None).dropna()
+        kpi2 = round(ratios.mean(), 2) if not ratios.empty else 0.0
+    else:
+        kpi2 = 0.0
+
+    # ---- Render KPI block ----
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Planned (h)", planned_h, delta=f"braki: {planned_missing}")
+        st.metric("Allocated (h)", alloc_h)
+        st.metric("Used until yesterday (h)", used_h)
+        if ratio_total is not None:
+            st.metric("Alloc / Planned", f"{ratio_total}%")
+        if not date_filter_active and summary["time_progress_avg"]:
+            st.metric("Ścieżka czasu (avg)", f"{summary['time_progress_avg']}%")
+    col2.metric("KPI 1: Zakończone / Planowane (BOM)", f"{kpi1_val}", delta=f"{kpi1_pct}%")
+    col3.metric("KPI 2: Alloc / Plan avg (compl. BOM)", f"{kpi2}")
+
     st.caption(
         f"Debug planned effort: customFields zaczytane dla {summary['customfields_seen']} core items; "
         f"planned effort znaleziono w {summary['planned_seen']}."
@@ -1703,6 +1748,8 @@ def main() -> None:
         display_df = pd.concat([task_df, bom_df], ignore_index=True) if (not task_df.empty or not bom_df.empty) else pd.DataFrame()
     if st.session_state.get("status_filter") == "COMPLETED" and not display_df.empty and "completed" in display_df:
         display_df = display_df[display_df["completed"] == True]
+    if date_filter_active and not display_df.empty:
+        display_df = _filter_by_due(display_df)
     render_df(
         display_df,
         core_cols,
