@@ -1233,6 +1233,7 @@ def aggregate_core_items(
             base_row["used_hours_until_yesterday"] = minutes_to_hours(used_minutes)
             core_task_rows.append(base_row)
         elif ctype == bom_task_type:
+            base_row["title"] = "\u2622 " + base_row["title"]
             alloc_minutes = sum_alloc(nearest_bom_task, tid, include_self=True)
             base_row["allocated_hours"] = round(alloc_minutes / 60)
             used_minutes = sum_used(nearest_bom_task, tid, include_self=True)
@@ -1400,7 +1401,7 @@ def main() -> None:
         )
         st.session_state["page"] = page
         st.divider()
-        st.radio("Filtruj zadania", ["ALL", "BOM"], horizontal=True, key="task_filter")
+        st.radio("Filtruj zadania", ["ALL", "\u2622 BOM"], horizontal=True, key="task_filter")
         st.radio("Status", ["ALL", "COMPLETED"], horizontal=True, key="status_filter")
         kpi_date_from = st.date_input("KPI due od", value=None, key="kpi_date_from")
         kpi_date_to = st.date_input("KPI due do", value=None, key="kpi_date_to")
@@ -1714,6 +1715,9 @@ def main() -> None:
         kpi1_total = 0
     kpi1_pct = 0 if kpi1_total == 0 else int(round(kpi1_completed / kpi1_total * 100))
     kpi1_val = round(kpi1_completed / kpi1_total, 2) if kpi1_total > 0 else 0.0
+    due_past = bom_df_kpi[bom_df_kpi["due_today_or_past"] == True] if not bom_df_kpi.empty and "due_today_or_past" in bom_df_kpi else pd.DataFrame()
+    kpi1_raw_completed = int(due_past["completed"].sum()) if not due_past.empty else 0
+    kpi1_raw_total = len(due_past)
 
     # KPI 2: avg alloc/planned for completed BOM / 100
     completed_bom = bom_df_kpi[bom_df_kpi["completed"] == True] if not bom_df_kpi.empty and "completed" in bom_df_kpi else pd.DataFrame()
@@ -1725,6 +1729,30 @@ def main() -> None:
         kpi2 = 0.0
 
     # ---- Render KPI block ----
+    def _kpi1_color(val: float) -> str:
+        if val < 0.50:
+            return "#d32f2f"   # red
+        elif val <= 0.95:
+            return "#f9a825"   # yellow
+        else:
+            return "#2e7d32"   # green
+
+    def _kpi2_color(val: float) -> str:
+        if val <= 1.00:
+            return "#2e7d32"   # green
+        elif val <= 1.25:
+            return "#f9a825"   # yellow
+        else:
+            return "#d32f2f"   # red
+
+    def _colored_metric(label: str, value: str, color: str) -> None:
+        st.markdown(f"""
+        <div style="margin:0.3rem 0">
+          <p style="color:#999;font-size:0.8rem;margin:0 0 2px 0">{label}</p>
+          <p style="color:{color};font-size:2.8rem;font-weight:600;margin:0">{value}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Planned (h)", planned_h, delta=f"braki: {planned_missing}")
@@ -1734,15 +1762,17 @@ def main() -> None:
             st.metric("Alloc / Planned", f"{ratio_total}%")
         if not date_filter_active and summary["time_progress_avg"]:
             st.metric("Ścieżka czasu (avg)", f"{summary['time_progress_avg']}%")
-    col2.metric("KPI 1: Zakończone / Planowane (BOM)", f"{kpi1_val}", delta=f"{kpi1_pct}%")
-    col3.metric("KPI 2: Alloc / Plan avg (compl. BOM)", f"{kpi2}")
+    with col2:
+        _colored_metric("KPI 1: Zakończone / Planowane (BOM)", f"{kpi1_val} &nbsp;<span style='font-size:0.5em;color:#888'>({kpi1_raw_completed}/{kpi1_raw_total})</span>", _kpi1_color(kpi1_val))
+    with col3:
+        _colored_metric("KPI 2: Alloc / Plan avg (compl. BOM)", str(kpi2), _kpi2_color(kpi2))
 
     st.caption(
         f"Debug planned effort: customFields zaczytane dla {summary['customfields_seen']} core items; "
         f"planned effort znaleziono w {summary['planned_seen']}."
     )
     st.subheader("Core Items (global)")
-    if st.session_state.get("task_filter") == "BOM":
+    if st.session_state.get("task_filter") == "\u2622 BOM":
         display_df = bom_df.copy()
     else:
         display_df = pd.concat([task_df, bom_df], ignore_index=True) if (not task_df.empty or not bom_df.empty) else pd.DataFrame()
