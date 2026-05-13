@@ -41,10 +41,9 @@ DEFAULT_BASE_URL = os.getenv("WRIKE_BASE_URL", "https://app-eu.wrike.com/api/v4"
 DEFAULT_API_KEY = os.getenv("WRIKE_API_KEY")
 DEFAULT_CLIENT_FOLDER = os.getenv("WRIKE_CLIENT_PROJECTS_FOLDER_ID", "")
 DEFAULT_CORE_TASK_TYPE = os.getenv("WRIKE_CORE_TASK_TYPE_ID", "IEAGWGLXPIAHEHEZ")
-DEFAULT_CORE_PROJECT_TYPE = os.getenv("WRIKE_CORE_PROJECT_TYPE_ID", "IEAGWGLXPIAHEHH3")
+DEFAULT_BOM_TASK_TYPE = os.getenv("WRIKE_BOM_TASK_TYPE_ID", "")
 DEFAULT_PLANNED_FIELD_ID = os.getenv("WRIKE_PLANNED_EFFORT_FIELD_ID", "IEAGWGLXJUALG3VY")
 DEFAULT_COMPLETED_STATUS_ID = os.getenv("WRIKE_COMPLETED_STATUS_ID", "IEAGWGLXJMGYX4ND")
-SKIPPED_CORE_PROJECT_TITLES = {"3. Mechanical Design"}
 
 MS_GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 MS_SHAREPOINT_HOST = os.getenv("MS_SHAREPOINT_HOST", "pidpolska.sharepoint.com")
@@ -66,6 +65,24 @@ SOLIDWORKS_CACHE_FILE = Path(".cache") / "solidworks_cache.json"
 WRIKE_COMMENTS_CACHE_FILE = Path(".cache") / "wrike_comments_cache.json"
 WRIKE_DATA_CACHE_FILE = Path(".cache") / "wrike_data_cache.json"
 TEAM_EFFORT_FILE = Path(".cache") / "team_effort.json"
+COMPLETED_OVERRIDES_FILE = Path(".cache") / "completed_overrides.json"
+
+
+def load_completed_overrides() -> Dict[str, date]:
+    data = _read_json_file(COMPLETED_OVERRIDES_FILE, {})
+    if not isinstance(data, dict):
+        return {}
+    result: Dict[str, date] = {}
+    for tid, v in data.items():
+        try:
+            result[tid] = date.fromisoformat(str(v))
+        except (ValueError, TypeError):
+            pass
+    return result
+
+
+def save_completed_overrides(overrides: Dict[str, date]) -> None:
+    _write_json_file(COMPLETED_OVERRIDES_FILE, {tid: d.isoformat() for tid, d in overrides.items()})
 
 
 # ---- Logging ---------------------------------------------------------------
@@ -198,22 +215,22 @@ def _kpi_aggregate_get(cache_key: str) -> Optional[Tuple[pd.DataFrame, pd.DataFr
         return None
     if _now_ts() - int(cached_at) > KPI_AGG_CACHE_TTL_SEC:
         return None
-    project_df = entry.get("project_df")
     task_df = entry.get("task_df")
+    bom_df = entry.get("bom_df")
     summary = entry.get("summary")
-    if not isinstance(project_df, pd.DataFrame) or not isinstance(task_df, pd.DataFrame) or not isinstance(summary, dict):
+    if not isinstance(task_df, pd.DataFrame) or not isinstance(bom_df, pd.DataFrame) or not isinstance(summary, dict):
         return None
-    return project_df.copy(), task_df.copy(), dict(summary)
+    return task_df.copy(), bom_df.copy(), dict(summary)
 
 
 def _kpi_aggregate_set(
-    cache_key: str, project_df: pd.DataFrame, task_df: pd.DataFrame, summary: Dict[str, Any]
+    cache_key: str, task_df: pd.DataFrame, bom_df: pd.DataFrame, summary: Dict[str, Any]
 ) -> None:
     _init_kpi_aggregate_cache()
     st.session_state["kpi_aggregate_cache"][cache_key] = {
         "cached_at": _now_ts(),
-        "project_df": project_df.copy(),
         "task_df": task_df.copy(),
+        "bom_df": bom_df.copy(),
         "summary": dict(summary),
     }
 
@@ -691,83 +708,6 @@ def fetch_tasks_for_project(
     return tasks
 
 
-@st.cache_data(ttl=WRIKE_DATA_CACHE_TTL_SEC, show_spinner=False)
-def fetch_projects_with_customfields(
-    base_url: str, api_key: str, project_id: str
-) -> List[Dict[str, Any]]:
-    """Fetch all descendant projects (including core projects) with customFields."""
-    cache_key = f"projects_with_customfields|{base_url.rstrip('/')}|{project_id}"
-    cached = _wrike_cache_get("data", cache_key, WRIKE_DATA_CACHE_TTL_SEC)
-    if isinstance(cached, list):
-        return cached
-    params: Dict[str, Any] = {
-        "descendants": "true",
-        "project": "true",
-        "fields": json.dumps(["customFields"]),
-        "pageSize": 1000,
-    }
-    items: List[Dict[str, Any]] = []
-    next_token: Optional[str] = None
-    page_count = 0
-
-    while True:
-        page_params = dict(params)
-        if next_token:
-            page_params["nextPageToken"] = next_token
-        try:
-            data = api_get(base_url, api_key, f"folders/{project_id}/folders", params=page_params)
-        except RuntimeError as exc:
-            if "nextPageToken" in str(exc):
-                log(f"Invalid nextPageToken for projects; stopping pagination. Error: {exc}")
-                break
-            raise
-
-        page_items = data.get("data", [])
-        items.extend(page_items)
-        next_token = data.get("nextPageToken") or None
-        page_count += 1
-        log(
-            f"Fetched projects page size={len(page_items)}, total={len(items)}, "
-            f"nextPageToken={next_token}"
-        )
-        if not next_token or page_count >= 10:
-            if page_count >= 10:
-                log("Stopped projects pagination after 10 pages (safety limit).")
-            break
-    _wrike_cache_set("data", cache_key, items)
-    return items
-
-
-@st.cache_data(ttl=WRIKE_DATA_CACHE_TTL_SEC, show_spinner=False)
-def fetch_core_project_tasks(
-    base_url: str, api_key: str, core_project_id: str
-) -> List[Dict[str, Any]]:
-    cache_key = f"core_project_tasks|{base_url.rstrip('/')}|{core_project_id}"
-    cached = _wrike_cache_get("data", cache_key, WRIKE_DATA_CACHE_TTL_SEC)
-    if isinstance(cached, list):
-        return cached
-    params: Dict[str, Any] = {
-        "descendants": "true",
-        "fields": json.dumps(["effortAllocation"]),
-        "pageSize": 1000,
-        "subTasks": "true",
-    }
-    items: List[Dict[str, Any]] = []
-    next_token: Optional[str] = None
-
-    while True:
-        page_params = dict(params)
-        if next_token:
-            page_params["nextPageToken"] = next_token
-        data = api_get(base_url, api_key, f"folders/{core_project_id}/tasks", params=page_params)
-        page_items = data.get("data", [])
-        items.extend(page_items)
-        next_token = data.get("nextPageToken") or None
-        if not next_token:
-            break
-    _wrike_cache_set("data", cache_key, items)
-    return items
-
 
 def fetch_wrike_comments(base_url: str, api_key: str, path: str) -> List[Dict[str, Any]]:
     cache_key = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
@@ -971,8 +911,6 @@ def prepare_solidworks_context() -> Optional[SolidworksContext]:
 def clear_wrike_cache() -> None:
     fetch_client_projects.clear()
     fetch_tasks_for_project.clear()
-    fetch_projects_with_customfields.clear()
-    fetch_core_project_tasks.clear()
     st.session_state.pop("wrike_comments_cache", None)
     st.session_state.pop("wrike_data_cache", None)
     st.session_state.pop("wrike_cache_loaded", None)
@@ -1003,14 +941,11 @@ def build_indexes(tasks: List[Dict[str, Any]]) -> Tuple[Dict[str, Dict[str, Any]
 def make_nearest_core_resolvers(
     tasks_by_id: Dict[str, Dict[str, Any]],
     core_task_type: str,
-    core_project_type: str,
-    skip_project_titles: Optional[Set[str]] = None,
+    bom_task_type: str,
 ) -> Tuple[
     Callable[[str], Optional[str]],
     Callable[[str], Optional[str]],
 ]:
-
-    skip_titles = skip_project_titles or set()
 
     def parent_ids(item: Dict[str, Any]) -> Iterable[str]:
         parents: List[str] = []
@@ -1033,49 +968,44 @@ def make_nearest_core_resolvers(
         return None
 
     @lru_cache(None)
-    def nearest_core_project(task_id: str) -> Optional[str]:
+    def nearest_bom_task(task_id: str) -> Optional[str]:
         task = tasks_by_id.get(task_id)
         if not task:
             return None
-        core_override = task.get("_core_project_id")
-        if core_override:
-            return core_override
-        if task.get("customItemTypeId") == core_project_type and task.get("title") not in skip_titles:
+        if task.get("customItemTypeId") == bom_task_type:
             return task_id
         for parent_id in parent_ids(task):
-            found = nearest_core_project(parent_id)
+            found = nearest_bom_task(parent_id)
             if found:
                 return found
         return None
 
-    return nearest_core_task, nearest_core_project
+    return nearest_core_task, nearest_bom_task
 
 
 def aggregate_core_items(
     tasks: List[Dict[str, Any]],
     core_task_type: str,
-    core_project_type: str,
+    bom_task_type: str,
     planned_field_id: str,
     completed_status_id: str,
     project_lookup: Optional[Dict[str, str]] = None,
     allowed_project_ids: Optional[Set[str]] = None,
-    extra_alloc_by_project: Optional[Dict[str, int]] = None,
-    extra_used_by_project: Optional[Dict[str, int]] = None,
     wrike_base_url: Optional[str] = None,
     wrike_api_key: Optional[str] = None,
     solidworks_context: Optional[SolidworksContext] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
     tasks_by_id, children = build_indexes(tasks)
-    nearest_core_task, nearest_core_project = make_nearest_core_resolvers(
+    nearest_core_task, nearest_bom_task = make_nearest_core_resolvers(
         tasks_by_id,
         core_task_type,
-        core_project_type,
-        skip_project_titles=SKIPPED_CORE_PROJECT_TITLES,
+        bom_task_type,
     )
 
     today = date.today()
     core_task_rows = []
-    core_project_rows = []
+    bom_task_rows = []
+    completed_overrides = load_completed_overrides()
 
     # Pre-compute allocated minutes per task
     alloc_by_task = {tid: allocated_minutes(task) for tid, task in tasks_by_id.items()}
@@ -1107,8 +1037,6 @@ def aggregate_core_items(
         netted_planned_by_task[tid] = compute_netted_planned(tid)
 
     lookup = project_lookup or {}
-    extra_alloc_by_project = extra_alloc_by_project or {}
-    extra_used_by_project = extra_used_by_project or {}
     solidworks_cache_dirty = False
 
     def annotate_solidworks(item_id: str, is_task_item: bool) -> Tuple[Optional[str], List[str]]:
@@ -1241,13 +1169,9 @@ def aggregate_core_items(
         if planned_hours is not None:
             planned_hours = int(round(planned_hours))
         project_id, project_title = resolve_client_project(task)
-        task_title = task.get("title")
         if allowed_project_ids is not None and (not project_id or project_id not in allowed_project_ids):
             continue
-        is_skipped_project = ctype == core_project_type and task_title in SKIPPED_CORE_PROJECT_TITLES
-        if is_skipped_project:
-            continue
-        if ctype not in {core_task_type, core_project_type}:
+        if ctype not in {core_task_type, bom_task_type}:
             continue
         start = iso_to_date(
             task.get("start")
@@ -1262,12 +1186,17 @@ def aggregate_core_items(
         completed = is_completed(task, completed_status_id)
         due_flag = bool(due and due <= today)
         completed_datetime = _completed_datetime(task)
+        override = completed_overrides.get(tid)
+        if override:
+            completed_datetime = datetime.combine(override, datetime.min.time())
         time_progress = None
-        reference_date = completed_datetime.date() if completed_datetime else today
-        if start and due and due > start and start <= reference_date:
+        if start and due and due > start:
             span = (due - start).days
             if span > 0:
-                elapsed = (min(reference_date, due) - start).days
+                if completed_datetime:
+                    elapsed = (completed_datetime.date() - start).days
+                else:
+                    elapsed = max(0, (today - start).days)
                 time_progress = int(round(elapsed / span * 100))
 
         base_row = {
@@ -1292,7 +1221,7 @@ def aggregate_core_items(
         if not base_row["warnings"]:
             base_row["warnings"] = None
 
-        is_task_item = ctype == core_task_type
+        is_task_item = ctype in {core_task_type, bom_task_type}
         solidworks_text, solidworks_pdf_urls = annotate_solidworks(tid, is_task_item)
         base_row["solidworks"] = solidworks_text
         base_row["solidworks_specs"] = solidworks_pdf_urls
@@ -1303,17 +1232,15 @@ def aggregate_core_items(
             used_minutes = sum_used(nearest_core_task, tid, include_self=True)
             base_row["used_hours_until_yesterday"] = minutes_to_hours(used_minutes)
             core_task_rows.append(base_row)
-        else:
-            extra_alloc = extra_alloc_by_project.get(tid, 0)
-            alloc_minutes = sum_alloc(nearest_core_project, tid, include_self=False) + extra_alloc
+        elif ctype == bom_task_type:
+            alloc_minutes = sum_alloc(nearest_bom_task, tid, include_self=True)
             base_row["allocated_hours"] = round(alloc_minutes / 60)
-            extra_used = extra_used_by_project.get(tid, 0)
-            used_minutes = sum_used(nearest_core_project, tid, include_self=False) + extra_used
+            used_minutes = sum_used(nearest_bom_task, tid, include_self=True)
             base_row["used_hours_until_yesterday"] = minutes_to_hours(used_minutes)
-            core_project_rows.append(base_row)
+            bom_task_rows.append(base_row)
 
     task_df = pd.DataFrame(core_task_rows)
-    project_df = pd.DataFrame(core_project_rows)
+    bom_df = pd.DataFrame(bom_task_rows)
 
     def add_ratio(df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
@@ -1330,15 +1257,15 @@ def aggregate_core_items(
         return df
 
     task_df = add_ratio(task_df)
-    project_df = add_ratio(project_df)
+    bom_df = add_ratio(bom_df)
 
     if not task_df.empty and "title" in task_df:
         task_df = task_df.sort_values("title")
-    if not project_df.empty and "title" in project_df:
-        project_df = project_df.sort_values("title")
+    if not bom_df.empty and "title" in bom_df:
+        bom_df = bom_df.sort_values("title")
 
     # Unified core items view
-    core_items_df = pd.concat([project_df, task_df], ignore_index=True) if (not project_df.empty or not task_df.empty) else pd.DataFrame()
+    core_items_df = pd.concat([task_df, bom_df], ignore_index=True) if (not task_df.empty or not bom_df.empty) else pd.DataFrame()
 
     # KPI summary
     def completion_stats(df: pd.DataFrame) -> Tuple[int, int]:
@@ -1347,19 +1274,19 @@ def aggregate_core_items(
         due_df = df[df["due_today_or_past"] == True]
         return int(due_df["completed"].sum()), int(len(due_df))
 
-    completed, due_total = completion_stats(pd.concat([task_df, project_df], ignore_index=True))
+    completed, due_total = completion_stats(bom_df)
     planned_total = pd.concat(
-        [task_df.get("planned_hours", pd.Series(dtype=float)), project_df.get("planned_hours", pd.Series(dtype=float))],
+        [task_df.get("planned_hours", pd.Series(dtype=float)), bom_df.get("planned_hours", pd.Series(dtype=float))],
         ignore_index=True,
     )
     alloc_total = pd.concat(
-        [task_df.get("allocated_hours", pd.Series(dtype=float)), project_df.get("allocated_hours", pd.Series(dtype=float))],
+        [task_df.get("allocated_hours", pd.Series(dtype=float)), bom_df.get("allocated_hours", pd.Series(dtype=float))],
         ignore_index=True,
     )
     used_series = pd.concat(
         [
             task_df.get("used_hours_until_yesterday", pd.Series(dtype=float)),
-            project_df.get("used_hours_until_yesterday", pd.Series(dtype=float)),
+            bom_df.get("used_hours_until_yesterday", pd.Series(dtype=float)),
         ],
         ignore_index=True,
     )
@@ -1378,14 +1305,14 @@ def aggregate_core_items(
             pd.concat(
                 [
                     task_df.get("time_progress_pct", pd.Series(dtype=float)),
-                    project_df.get("time_progress_pct", pd.Series(dtype=float)),
+                    bom_df.get("time_progress_pct", pd.Series(dtype=float)),
                 ],
                 ignore_index=True,
             ).dropna().mean()
             if not pd.concat(
                 [
                     task_df.get("time_progress_pct", pd.Series(dtype=float)),
-                    project_df.get("time_progress_pct", pd.Series(dtype=float)),
+                    bom_df.get("time_progress_pct", pd.Series(dtype=float)),
                 ],
                 ignore_index=True,
             ).dropna().empty
@@ -1397,89 +1324,14 @@ def aggregate_core_items(
     if solidworks_cache_dirty:
         persist_solidworks_cache()
 
-    return project_df, task_df, summary
-
-
-def build_tree_view(
-    tasks: List[Dict[str, Any]],
-    core_task_type: str,
-    core_project_type: str,
-) -> List[Dict[str, Any]]:
-    tasks_by_id, children = build_indexes(tasks)
-    nearest_core_task, nearest_core_project = make_nearest_core_resolvers(
-        tasks_by_id,
-        core_task_type,
-        core_project_type,
-        skip_project_titles=SKIPPED_CORE_PROJECT_TITLES,
-    )
-
-    def label_with_link(item_id: str, role: Optional[str] = None) -> str:
-        item = tasks_by_id.get(item_id, {})
-        title = item.get("title") or "(bez tytułu)"
-        label = f"{role}: {title}" if role else title
-        permalink = item.get("permalink")
-        if permalink:
-            return f"[{label}]({permalink})"
-        return label
-
-    # Build grouping from core project -> core task -> other descendants (for inspection)
-    tree: Dict[str, Dict[str, Any]] = {}
-    for tid, task in tasks_by_id.items():
-        cp = nearest_core_project(tid)
-        ct = nearest_core_task(tid)
-        if not cp and not ct:
-            continue  # outside of monitored items
-
-        if cp and tasks_by_id.get(cp, {}).get("title") in SKIPPED_CORE_PROJECT_TITLES:
-            cp = None
-        if cp:
-            node = tree.setdefault(
-                cp,
-                {
-                    "id": cp,
-                    "title": tasks_by_id.get(cp, {}).get("title"),
-                    "permalink": tasks_by_id.get(cp, {}).get("permalink"),
-                    "core_tasks": defaultdict(list),
-                    "loose_tasks": [],
-                },
-            )
-            if ct and ct != cp:
-                node["core_tasks"][ct].append(tid)
-            elif tid != cp:
-                node["loose_tasks"].append(tid)
-        elif ct:
-            # Task belongs to core task but not within a core project chain
-            node = tree.setdefault(
-                f"__orphan_ct_{ct}",
-                {"id": ct, "title": tasks_by_id.get(ct, {}).get("title"), "core_tasks": defaultdict(list), "loose_tasks": []},
-            )
-            if tid != ct:
-                node["core_tasks"][ct].append(tid)
-
-    readable = []
-    for cp_id, node in tree.items():
-        entry = {
-            "core_project": label_with_link(cp_id, role="Core item"),
-            "core_tasks": [],
-            "other_tasks": [],
-        }
-        for ct_id, task_ids in node["core_tasks"].items():
-            entry["core_tasks"].append(
-                {
-                    "core_task": label_with_link(ct_id, role="Core item"),
-                    "tasks": [label_with_link(t) for t in task_ids if t in tasks_by_id],
-                }
-            )
-        entry["other_tasks"] = [label_with_link(t) for t in node["loose_tasks"] if t in tasks_by_id]
-        readable.append(entry)
-    return readable
+    return task_df, bom_df, summary
 
 
 def expand_dynamic_spec_columns(
-    project_df: pd.DataFrame, task_df: pd.DataFrame
+    task_df: pd.DataFrame, bom_df: pd.DataFrame
 ) -> Tuple[pd.DataFrame, pd.DataFrame, int]:
     max_specs = 0
-    for df in [project_df, task_df]:
+    for df in [task_df, bom_df]:
         if df.empty or "solidworks_specs" not in df.columns:
             continue
         for value in df["solidworks_specs"]:
@@ -1490,7 +1342,7 @@ def expand_dynamic_spec_columns(
         if df.empty:
             return df
         out = df.copy()
-        specs_series = out["solidworks_specs"] if "solidworks_specs" in out.columns else pd.Series([[]] * len(out))
+        specs_series = out["solidworks_specs"] if "solidworks_specs" in out.columns else pd.Series([[]] * len(out), index=out.index)
         for idx in range(max_specs):
             col = f"solidworks_pdf_{idx + 1}"
             out[col] = specs_series.apply(
@@ -1500,7 +1352,7 @@ def expand_dynamic_spec_columns(
             out = out.drop(columns=["solidworks_specs"])
         return out
 
-    return apply(project_df), apply(task_df), max_specs
+    return apply(task_df), apply(bom_df), max_specs
 
 
 # ---- Auth --------------------------------------------------------------------
@@ -1548,12 +1400,14 @@ def main() -> None:
         )
         st.session_state["page"] = page
         st.divider()
+        st.radio("Filtruj zadania", ["ALL", "BOM"], horizontal=True, key="task_filter")
+        st.radio("Status", ["ALL", "COMPLETED"], horizontal=True, key="status_filter")
         st.header("Konfiguracja")
         base_url = DEFAULT_BASE_URL
         api_key = DEFAULT_API_KEY
         client_folder = DEFAULT_CLIENT_FOLDER
-        core_project_type = DEFAULT_CORE_PROJECT_TYPE
         core_task_type = DEFAULT_CORE_TASK_TYPE
+        bom_task_type = DEFAULT_BOM_TASK_TYPE
         planned_field_id = DEFAULT_PLANNED_FIELD_ID
         completed_status_id = DEFAULT_COMPLETED_STATUS_ID
         st.caption("Parametry ładowane z .env.")
@@ -1602,10 +1456,6 @@ def main() -> None:
         return
 
     # Step 2: taski projektu
-    cutoff_date = date.today() - timedelta(days=1)
-    extra_alloc_by_project: Dict[str, int] = defaultdict(int)
-    extra_used_by_project: Dict[str, int] = defaultdict(int)
-    core_project_ids: Set[str] = set()
     with st.spinner("Pobieram taski projektu z Wrike..."):
         try:
             tasks: List[Dict[str, Any]] = []
@@ -1616,13 +1466,9 @@ def main() -> None:
                     tid = task["id"]
                     if tid in existing_ids:
                         continue
-                    if task.get("customItemTypeId") == core_project_type:
-                        core_project_ids.add(tid)
                     task["_selected_project_id"] = pid
                     tasks.append(task)
                     existing_ids.add(tid)
-                # Core projects removed – fetch_projects_with_customfields skipped
-            # Core project extra tasks skipped
         except Exception as exc:  # noqa: BLE001
             st.error(str(exc))
             return
@@ -1637,8 +1483,8 @@ def main() -> None:
         {
             "selected_projects": sorted(selected_projects),
             "refresh_nonce": st.session_state.get("refresh_nonce", 0),
-            "core_project_type": core_project_type,
             "core_task_type": core_task_type,
+            "bom_task_type": bom_task_type,
             "planned_field_id": planned_field_id,
             "completed_status_id": completed_status_id,
         },
@@ -1648,26 +1494,24 @@ def main() -> None:
     cached_agg = _kpi_aggregate_get(agg_cache_key)
     if cached_agg is not None:
         _inc_perf_metric("kpi_aggregate_cache_hit")
-        project_df, task_df, summary = cached_agg
+        task_df, bom_df, summary = cached_agg
     else:
         _inc_perf_metric("kpi_aggregate_cache_miss")
-        project_df, task_df, summary = aggregate_core_items(
+        task_df, bom_df, summary = aggregate_core_items(
             tasks,
             core_task_type=core_task_type,
-            core_project_type=core_project_type,
+            bom_task_type=bom_task_type,
             planned_field_id=planned_field_id,
             completed_status_id=completed_status_id,
             project_lookup=project_map,
             allowed_project_ids=set(selected_projects),
-            extra_alloc_by_project=extra_alloc_by_project,
-            extra_used_by_project=extra_used_by_project,
             wrike_base_url=base_url,
             wrike_api_key=api_key,
             solidworks_context=solidworks_context,
         )
-        _kpi_aggregate_set(agg_cache_key, project_df, task_df, summary)
+        _kpi_aggregate_set(agg_cache_key, task_df, bom_df, summary)
     _set_stage_time("aggregate", time.perf_counter() - aggregate_t0)
-    project_df, task_df, spec_col_count = expand_dynamic_spec_columns(project_df, task_df)
+    task_df, bom_df, spec_col_count = expand_dynamic_spec_columns(task_df, bom_df)
     if st.session_state["page"] == "DAILY PLANNED EFFORT":
         st.subheader("DAILY PLANNED EFFORT")
         st.caption(
@@ -1675,7 +1519,7 @@ def main() -> None:
             "rozłożonych równo na dni robocze (pon-pt)"
         )
 
-        core_df = pd.concat([project_df, task_df], ignore_index=True)
+        core_df = pd.concat([task_df, bom_df], ignore_index=True)
         daily_df = compute_daily_allocated_effort(core_df)
 
         if daily_df.empty:
@@ -1847,18 +1691,20 @@ def main() -> None:
             delta=f"{completion_pct_inner}%",
         )
 
-    render_kpi_block(summary, "Zakończone / Planowane")
+    render_kpi_block(summary, "Zakończone / Planowane (BOM)")
     st.caption(
         f"Debug planned effort: customFields zaczytane dla {summary['customfields_seen']} core items; "
         f"planned effort znaleziono w {summary['planned_seen']}."
     )
     st.subheader("Core Items (global)")
+    if st.session_state.get("task_filter") == "BOM":
+        display_df = bom_df.copy()
+    else:
+        display_df = pd.concat([task_df, bom_df], ignore_index=True) if (not task_df.empty or not bom_df.empty) else pd.DataFrame()
+    if st.session_state.get("status_filter") == "COMPLETED" and not display_df.empty and "completed" in display_df:
+        display_df = display_df[display_df["completed"] == True]
     render_df(
-        pd.concat(
-            [project_df, task_df], ignore_index=True
-        )
-        if not project_df.empty or not task_df.empty
-        else pd.DataFrame(),
+        display_df,
         core_cols,
         column_config={
             "permalink": st.column_config.LinkColumn("Link", display_text="otwórz"),
@@ -1870,6 +1716,31 @@ def main() -> None:
             },
         },
     )
+
+    with st.expander("Nadpisz daty completed"):
+        overrides = load_completed_overrides()
+        if overrides:
+            st.caption(f"Aktywne nadpisania: {len(overrides)}")
+        all_items = pd.concat([task_df, bom_df], ignore_index=True) if (not task_df.empty or not bom_df.empty) else pd.DataFrame()
+        if not all_items.empty:
+            item_options = {row["id"]: f"[{row.get('project', '')}] {row['title']}" for _, row in all_items.iterrows()}
+            selected_id = st.selectbox("Wybierz taska", options=list(item_options.keys()), format_func=lambda tid: item_options[tid])
+            current_override = overrides.get(selected_id)
+            if current_override:
+                st.info(f"Obecne nadpisanie: {current_override.isoformat()}")
+            new_date = st.date_input("Nowa data completed", value=current_override or date.today(), key="override_date")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Zapisz nadpisanie"):
+                    overrides[selected_id] = new_date
+                    save_completed_overrides(overrides)
+                    st.rerun()
+            with col_b:
+                if current_override and st.button("Usuń nadpisanie"):
+                    del overrides[selected_id]
+                    save_completed_overrides(overrides)
+                    st.rerun()
+
     with st.expander("Log (debug)"):
         _init_logs()
         _init_perf_metrics()
