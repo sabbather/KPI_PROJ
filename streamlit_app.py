@@ -3752,18 +3752,27 @@ def main() -> None:
                 )
 
                 average_daily_h = total_h / workdays_in_range if workdays_in_range else 0.0
+                plan_display_h = int(round(total_h))
+                assigned_display_h = int(round(assigned_project_h))
+                remaining_display_h = plan_display_h - assigned_display_h
                 c1, c2, c3 = st.columns(3)
                 c1.metric(
-                    "Plan / przypisane godz.",
-                    f"{total_h:.0f} / {assigned_project_h:.0f}",
+                    "Plan - przypisane = pozostało",
+                    f"{plan_display_h}-{assigned_display_h}={remaining_display_h}",
                     help=(
-                        "Planowane godziny / godziny przypisane do wybranych "
-                        "projektów w wybranym zakresie dat. Inne zadania są "
-                        "pokazane osobno i nie są wliczane do tej wartości."
+                        "Planowane godziny minus godziny przypisane do wybranych "
+                        "projektów w wybranym zakresie dat. Wynik ujemny oznacza, "
+                        "że przypisano więcej godzin niż plan. Inne zadania nie są "
+                        "wliczane do tej wartości."
                     ),
                 )
                 c2.metric("Dni roboczych", n_dates)
                 c3.metric("Core itemów", n_items)
+                if remaining_display_h < 0:
+                    st.caption(
+                        f"Przypisano więcej niż plan o "
+                        f"{abs(remaining_display_h)} h."
+                    )
                 st.caption(
                     f"Przypisania w zakresie: projekty {assigned_project_h:.1f} h, "
                     f"inne zadania {assigned_external_h:.1f} h."
