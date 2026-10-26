@@ -3,3 +3,4 @@ __pycache__/
 trashbin/
 .cache/
 .cache/solidworks_cache.json
+nginx/

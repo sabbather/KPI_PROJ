@@ -10,6 +10,7 @@ Environment (.env):
   WRIKE_CORE_PROJECT_TYPE_ID=IEAGWGLXPIAHEHH3            # optional override
   WRIKE_PLANNED_EFFORT_FIELD_ID=IEAGWGLXJUALG3VY         # optional override
   WRIKE_COMPLETED_STATUS_ID=IEAGWGLXJMGYX4ND             # optional override
+  KONSTRUKTORZY=JK,MP,AW                                # optional seed for constructor initials
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import math
 import os
 import hashlib
 import time
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -65,9 +67,15 @@ KPI_AGG_CACHE_TTL_SEC = int(os.getenv("KPI_AGG_CACHE_TTL_SEC", "3600"))
 SOLIDWORKS_CACHE_FILE = Path(".cache") / "solidworks_cache.json"
 WRIKE_COMMENTS_CACHE_FILE = Path(".cache") / "wrike_comments_cache.json"
 WRIKE_DATA_CACHE_FILE = Path(".cache") / "wrike_data_cache.json"
-TEAM_MEMBERS_FILE = Path(".cache") / "team_members.json"
 DAILY_HOURS_FILE = Path(".cache") / "daily_hours.json"
 COMPLETED_OVERRIDES_FILE = Path(".cache") / "completed_overrides.json"
+CONSTRUCTORS_FILE = Path(".cache") / "constructors.json"
+CONSTRUCTOR_ASSIGNMENTS_FILE = Path(".cache") / "constructor_assignments.json"
+DEFAULT_CONSTRUCTORS: List[str] = [
+    item.strip().upper()
+    for item in os.getenv("KONSTRUKTORZY", "").replace(";", ",").split(",")
+    if item.strip()
+]
 
 
 def load_completed_overrides() -> Dict[str, date]:
@@ -122,6 +130,106 @@ def _write_json_file(path: Path, payload: Any) -> None:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
         log(f"Failed writing cache file {path}: {exc}")
+
+
+# ---- Constructors & resource assignments -----------------------------------
+def parse_constructors(value: str) -> List[str]:
+    """Parse comma/space separated initials into a unique, uppercase list."""
+    raw = value.replace(";", ",").replace("\n", ",")
+    items: List[str] = []
+    for chunk in raw.split(","):
+        for token in chunk.split():
+            token = token.strip().upper()
+            if token and token not in items:
+                items.append(token)
+    return items
+
+
+def load_constructors() -> List[str]:
+    payload = _read_json_file(CONSTRUCTORS_FILE, None)
+    if isinstance(payload, dict):
+        payload = payload.get("constructors")
+    if isinstance(payload, list):
+        parsed = []
+        for item in payload:
+            token = str(item).strip().upper()
+            if token and token not in parsed:
+                parsed.append(token)
+        if parsed:
+            return parsed
+    return list(DEFAULT_CONSTRUCTORS)
+
+
+def save_constructors(constructors: List[str]) -> None:
+    _write_json_file(CONSTRUCTORS_FILE, {"constructors": constructors})
+
+
+def load_constructor_assignments() -> List[Dict[str, Any]]:
+    payload = _read_json_file(CONSTRUCTOR_ASSIGNMENTS_FILE, {"assignments": []})
+    if isinstance(payload, dict):
+        payload = payload.get("assignments")
+    if not isinstance(payload, list):
+        return []
+    cleaned: List[Dict[str, Any]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        days = item.get("days")
+        if not isinstance(days, dict):
+            days = {}
+        cleaned_days: Dict[str, float] = {}
+        for day_str, hours in days.items():
+            try:
+                day_value = date.fromisoformat(str(day_str))
+                hours_value = float(hours)
+            except (TypeError, ValueError):
+                continue
+            if hours_value > 0:
+                cleaned_days[day_value.isoformat()] = round(hours_value, 2)
+        if not cleaned_days:
+            continue
+        cleaned.append(
+            {
+                "id": str(item.get("id") or uuid.uuid4().hex),
+                "kind": "external" if item.get("kind") == "external" else "project",
+                "project_id": item.get("project_id"),
+                "project": str(item.get("project") or ""),
+                "label": str(item.get("label") or item.get("project") or ""),
+                "constructor": str(item.get("constructor") or "").upper(),
+                "start_date": str(item.get("start_date") or min(cleaned_days)),
+                "end_date": str(item.get("end_date") or max(cleaned_days)),
+                "mode": str(item.get("mode") or "custom"),
+                "hours_per_day": item.get("hours_per_day"),
+                "days": cleaned_days,
+                "created_at": item.get("created_at"),
+            }
+        )
+    return cleaned
+
+
+def save_constructor_assignments(assignments: List[Dict[str, Any]]) -> None:
+    _write_json_file(CONSTRUCTOR_ASSIGNMENTS_FILE, {"assignments": assignments})
+
+
+def _init_resource_state() -> None:
+    if "constructors" not in st.session_state:
+        st.session_state["constructors"] = load_constructors()
+    if "constructor_assignments" not in st.session_state:
+        st.session_state["constructor_assignments"] = load_constructor_assignments()
+    if "assignments_dirty" not in st.session_state:
+        st.session_state["assignments_dirty"] = False
+    if "assignment_selection" not in st.session_state:
+        st.session_state["assignment_selection"] = set()
+    if "assign_editor_nonce" not in st.session_state:
+        st.session_state["assign_editor_nonce"] = 0
+    if "effective_daily_hours" not in st.session_state:
+        try:
+            st.session_state["effective_daily_hours"] = float(
+                _read_json_file(DAILY_HOURS_FILE, 6.0)
+            )
+        except (TypeError, ValueError):
+            st.session_state["effective_daily_hours"] = 6.0
+
 
 
 def _init_perf_metrics() -> None:
@@ -574,6 +682,333 @@ def compute_daily_allocated_effort(df: pd.DataFrame) -> pd.DataFrame:
                 "daily_hours": round(daily, 2),
             })
     return pd.DataFrame(rows)
+
+
+# ---- Resource planning helpers ---------------------------------------------
+WEEKDAY_LABELS = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Nd"]
+
+
+def business_days_between(start: date, end: date) -> List[date]:
+    if end < start:
+        return []
+    return [
+        start + timedelta(days=i)
+        for i in range((end - start).days + 1)
+        if (start + timedelta(days=i)).weekday() < 5
+    ]
+
+
+def expand_assignment_days(
+    assignments: List[Dict[str, Any]],
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+) -> pd.DataFrame:
+    columns = [
+        "assignment_id",
+        "kind",
+        "project_id",
+        "project",
+        "label",
+        "constructor",
+        "date",
+        "hours",
+    ]
+    rows: List[Dict[str, Any]] = []
+    for assignment in assignments or []:
+        days = assignment.get("days") or {}
+        if not isinstance(days, dict):
+            continue
+        for day_str, hours in days.items():
+            try:
+                day_value = date.fromisoformat(str(day_str))
+                hours_value = float(hours)
+            except (TypeError, ValueError):
+                continue
+            if start is not None and day_value < start:
+                continue
+            if end is not None and day_value > end:
+                continue
+            if hours_value <= 0:
+                continue
+            rows.append(
+                {
+                    "assignment_id": assignment.get("id"),
+                    "kind": "external" if assignment.get("kind") == "external" else "project",
+                    "project_id": assignment.get("project_id"),
+                    "project": assignment.get("project") or "",
+                    "label": assignment.get("label") or assignment.get("project") or "",
+                    "constructor": str(assignment.get("constructor") or "").upper(),
+                    "date": day_value,
+                    "hours": hours_value,
+                }
+            )
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows)
+
+
+def project_date_ranges(core_df: pd.DataFrame) -> Dict[str, Tuple[date, date]]:
+    if core_df is None or core_df.empty or "project_id" not in core_df.columns:
+        return {}
+    work = core_df.copy()
+    work["_start"] = work["start_date"].map(_to_date_only) if "start_date" in work else None
+    work["_due"] = work["due_date"].map(_to_date_only) if "due_date" in work else None
+    work = work.dropna(subset=["_start", "_due"])
+    ranges: Dict[str, Tuple[date, date]] = {}
+    for project_id, group in work.groupby("project_id"):
+        if not project_id:
+            continue
+        start = min(group["_start"])
+        end = max(group["_due"])
+        if isinstance(start, date) and isinstance(end, date) and end >= start:
+            ranges[str(project_id)] = (start, end)
+    return ranges
+
+
+def _assignment_day_hours(
+    assignments: List[Dict[str, Any]], constructor: str, day: date
+) -> float:
+    day_key = day.isoformat()
+    total = 0.0
+    for assignment in assignments or []:
+        if str(assignment.get("constructor") or "").upper() != constructor:
+            continue
+        days = assignment.get("days") or {}
+        try:
+            total += float(days.get(day_key, 0.0))
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _build_assignment_block(
+    kind: str,
+    project_id: Optional[str],
+    project: str,
+    label: str,
+    constructor: str,
+    start: date,
+    end: date,
+    mode: str,
+    target_hours: float,
+    effective_daily_hours: float,
+    assignments: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    days: Dict[str, float] = {}
+    for day in business_days_between(start, end):
+        available = max(0.0, float(effective_daily_hours) - _assignment_day_hours(assignments, constructor, day))
+        if available <= 0.001:
+            continue
+        hours = min(available, float(target_hours))
+        if hours > 0.001:
+            days[day.isoformat()] = round(hours, 2)
+    if not days:
+        return None
+    return {
+        "id": uuid.uuid4().hex,
+        "kind": "external" if kind == "external" else "project",
+        "project_id": project_id,
+        "project": project,
+        "label": label,
+        "constructor": constructor,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "mode": mode,
+        "hours_per_day": round(float(target_hours), 2),
+        "days": days,
+        "created_at": datetime.utcnow().isoformat(timespec="seconds"),
+    }
+
+
+def assign_constructor_to_ranges(
+    assignments: List[Dict[str, Any]],
+    constructor: str,
+    ranges_with_names: List[Tuple[str, str, date, date]],
+    mode: str,
+    target_hours: float,
+    effective_daily_hours: float,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    working = list(assignments)
+    created: List[Dict[str, Any]] = []
+    for project_id, project_name, start, end in ranges_with_names:
+        block = _build_assignment_block(
+            "project",
+            project_id,
+            project_name,
+            project_name,
+            constructor,
+            start,
+            end,
+            mode,
+            target_hours,
+            effective_daily_hours,
+            working,
+        )
+        if block is not None:
+            working.append(block)
+            created.append(block)
+    return created, working
+
+
+def add_external_assignment(
+    assignments: List[Dict[str, Any]],
+    constructor: str,
+    label: str,
+    start: date,
+    end: date,
+    mode: str,
+    target_hours: float,
+    effective_daily_hours: float,
+) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    block = _build_assignment_block(
+        "external",
+        None,
+        "Inne zadanie",
+        label,
+        constructor,
+        start,
+        end,
+        mode,
+        target_hours,
+        effective_daily_hours,
+        assignments,
+    )
+    if block is None:
+        return None, list(assignments)
+    return block, list(assignments) + [block]
+
+
+def build_project_day_table(
+    core_df: pd.DataFrame,
+    selected_projects: List[str],
+    project_map: Dict[str, str],
+    daily_df: pd.DataFrame,
+    assignments: List[Dict[str, Any]],
+    effective_daily_hours: float,
+    constructor: str,
+    selection: Set[str],
+) -> pd.DataFrame:
+    ranges = project_date_ranges(core_df)
+    rows: List[Dict[str, Any]] = []
+    for project_id in selected_projects:
+        if project_id not in ranges:
+            continue
+        start, end = ranges[project_id]
+        project_name = project_map.get(project_id, project_id)
+        for day in business_days_between(start, end):
+            rows.append(
+                {
+                    "project_id": project_id,
+                    "project": project_name,
+                    "date": day,
+                    "date_str": day.strftime("%d.%m.%Y"),
+                    "weekday": WEEKDAY_LABELS[day.weekday()],
+                }
+            )
+    if not rows:
+        return pd.DataFrame()
+
+    table = pd.DataFrame(rows)
+    if daily_df is not None and not daily_df.empty:
+        plan = daily_df.copy()
+        plan["date"] = pd.to_datetime(plan["date"]).dt.date
+        plan = (
+            plan.groupby(["project", "date"], as_index=False)["daily_hours"]
+            .sum()
+            .rename(columns={"daily_hours": "plan_hours"})
+        )
+        table = table.merge(plan, on=["project", "date"], how="left")
+    else:
+        table["plan_hours"] = 0.0
+    table["plan_hours"] = pd.to_numeric(table["plan_hours"], errors="coerce").fillna(0.0)
+
+    expanded = expand_assignment_days(assignments)
+    if expanded.empty:
+        table["assigned_constructor_h"] = 0.0
+        table["assigned_project_h"] = 0.0
+    else:
+        constructor_totals = (
+            expanded[expanded["constructor"] == constructor]
+            .groupby("date")["hours"]
+            .sum()
+        )
+        table["assigned_constructor_h"] = table["date"].map(constructor_totals).fillna(0.0)
+        project_totals = (
+            expanded[expanded["kind"] == "project"]
+            .groupby(["project_id", "date"])["hours"]
+            .sum()
+        )
+        table["assigned_project_h"] = [
+            float(project_totals.get((project_id, day), 0.0))
+            for project_id, day in zip(table["project_id"], table["date"])
+        ]
+
+    table["available_h"] = (
+        float(effective_daily_hours) - table["assigned_constructor_h"]
+    ).clip(lower=0.0)
+    table["_row_key"] = [
+        f"{project_id}::{day.isoformat()}"
+        for project_id, day in zip(table["project_id"], table["date"])
+    ]
+    table["selected"] = table["_row_key"].isin(selection)
+    return table.set_index("_row_key")
+
+
+def expand_selection_to_ranges(
+    selected_keys: Set[str], all_keys: List[str]
+) -> Set[str]:
+    """Expand checked project/day rows to the full range between extremes per project."""
+    if not selected_keys:
+        return set()
+    grouped: Dict[str, List[Tuple[date, str]]] = defaultdict(list)
+    for key in all_keys:
+        try:
+            project_id, date_str = str(key).split("::", 1)
+            day_value = date.fromisoformat(date_str)
+        except (ValueError, TypeError):
+            continue
+        grouped[project_id].append((day_value, key))
+
+    expanded: Set[str] = set()
+    for items in grouped.values():
+        selected_dates = [day for day, key in items if key in selected_keys]
+        if not selected_dates:
+            continue
+        start, end = min(selected_dates), max(selected_dates)
+        for day_value, key in items:
+            if start <= day_value <= end:
+                expanded.add(key)
+    return expanded
+
+
+def _polish_person_label(count: int) -> str:
+    if count == 1:
+        return "1 osoba"
+    if 2 <= count <= 4:
+        return f"{count} osoby"
+    return f"{count} osób"
+
+
+def _polish_hours_label(hours: float) -> str:
+    rounded = int(round(hours))
+    if rounded == 1:
+        return "1 godzina"
+    if 2 <= rounded <= 4:
+        return f"{rounded} godziny"
+    return f"{rounded} godzin"
+
+
+def format_required_constructors(full_people: int, remainder_hours: float) -> str:
+    base = f"{_polish_person_label(int(full_people))} full"
+    if remainder_hours >= 0.5:
+        return f"{base} i {_polish_hours_label(remainder_hours)}"
+    return base
+
+
+def short_label(value: Any, max_len: int = 24) -> str:
+    text = str(value)
+    return text if len(text) <= max_len else text[: max_len - 1] + "…"
+
 
 
 def render_df(
@@ -1439,21 +1874,588 @@ def check_password() -> None:
 
 
 # ---- UI --------------------------------------------------------------------
+def render_resource_planning_section(
+    core_df: pd.DataFrame,
+    daily_df: pd.DataFrame,
+    project_map: Dict[str, str],
+    selected_projects: List[str],
+    constructors: List[str],
+    effective_daily_hours: float,
+) -> None:
+    st.subheader("Planowanie konstruktorów")
+    st.caption("Tabela obejmuje dni robocze (pon.–pt.) w zakresie dat każdego projektu.")
+    flash = st.session_state.pop("assignment_flash", None)
+    if flash:
+        st.success(flash)
+
+    if not constructors:
+        st.info(
+            "Dodaj konstruktorów w panelu bocznym (sekcja „Konstruktorzy”), "
+            "aby przypisywać godziny."
+        )
+        return
+
+    assignments = st.session_state["constructor_assignments"]
+    dirty = bool(st.session_state.get("assignments_dirty", False))
+    if dirty:
+        st.warning("Masz niezapisane zmiany. Kliknij „Zapisz”, aby utrwalić je na dysku.")
+
+    save_col, revert_col, hint_col = st.columns([1, 1, 3])
+    if save_col.button("Zapisz", type="primary", key="save_assignments"):
+        save_constructor_assignments(assignments)
+        st.session_state["assignments_dirty"] = False
+        st.session_state["assignment_flash"] = "Zapisano przypisania konstruktorów."
+        st.rerun()
+    if revert_col.button(
+        "Cofnij zmiany",
+        key="revert_assignments",
+        disabled=not dirty,
+    ):
+        st.session_state["constructor_assignments"] = load_constructor_assignments()
+        st.session_state["assignments_dirty"] = False
+        st.session_state["assignment_selection"] = set()
+        st.session_state["assign_editor_nonce"] = (
+            int(st.session_state.get("assign_editor_nonce", 0)) + 1
+        )
+        st.session_state["assignment_flash"] = "Przywrócono ostatni zapis."
+        st.rerun()
+    hint_col.caption("Zmiany są trwałe dopiero po kliknięciu „Zapisz”.")
+
+    if st.session_state.get("assign_constructor") not in constructors:
+        st.session_state["assign_constructor"] = constructors[0]
+    selected_constructor = st.selectbox(
+        "Konstruktor do przypisania",
+        options=constructors,
+        key="assign_constructor",
+        help=(
+            "Dostępne godziny konstruktora to efektywne godziny dziennie "
+            "pomniejszone o jego wcześniejsze przypisania w danym dniu."
+        ),
+    )
+
+    project_ranges = project_date_ranges(core_df)
+    table = build_project_day_table(
+        core_df=core_df,
+        selected_projects=selected_projects,
+        project_map=project_map,
+        daily_df=daily_df,
+        assignments=assignments,
+        effective_daily_hours=effective_daily_hours,
+        constructor=selected_constructor,
+        selection=set(st.session_state.get("assignment_selection", set())),
+    )
+
+    if table.empty:
+        st.info(
+            "Brak dni do zaplanowania — wybrane projekty nie mają kompletnych dat "
+            "start/koniec w core itemach."
+        )
+    else:
+        valid_keys = set(table.index)
+        selection = set(st.session_state.get("assignment_selection", set())) & valid_keys
+        st.session_state["assignment_selection"] = selection
+        table["selected"] = table.index.isin(selection)
+        nonce = int(st.session_state.get("assign_editor_nonce", 0))
+        table_sig = hashlib.md5(
+            "|".join(table.index.tolist()).encode("utf-8")
+        ).hexdigest()[:8]
+        display_columns = [
+            "selected",
+            "project",
+            "date_str",
+            "weekday",
+            "plan_hours",
+            "available_h",
+            "assigned_project_h",
+        ]
+        edited = st.data_editor(
+            table[display_columns],
+            column_config={
+                "selected": st.column_config.CheckboxColumn(
+                    "Zaznacz",
+                    help="Zaznacz dwa dni w obrębie projektu, aby wybrać cały zakres.",
+                    default=False,
+                ),
+                "project": st.column_config.TextColumn("Projekt"),
+                "date_str": st.column_config.TextColumn("Dzień"),
+                "weekday": st.column_config.TextColumn("Dzień tyg."),
+                "plan_hours": st.column_config.NumberColumn("Plan (h)", format="%.2f"),
+                "available_h": st.column_config.NumberColumn(
+                    f"Dostępne h – {selected_constructor}", format="%.2f"
+                ),
+                "assigned_project_h": st.column_config.NumberColumn(
+                    "Przypisane do projektu (h)", format="%.2f"
+                ),
+            },
+            disabled=[
+                "project",
+                "date_str",
+                "weekday",
+                "plan_hours",
+                "available_h",
+                "assigned_project_h",
+            ],
+            hide_index=True,
+            num_rows="fixed",
+            key=f"assign_editor_{nonce}_{table_sig}",
+            width="stretch",
+        )
+
+        selection_before = set(st.session_state.get("assignment_selection", set()))
+        current_selection = set(
+            edited.index[edited["selected"].fillna(False)].tolist()
+        )
+        all_keys = table.index.tolist()
+        if current_selection != selection_before:
+            expanded = expand_selection_to_ranges(current_selection, all_keys)
+            st.session_state["assignment_selection"] = expanded
+            if expanded != current_selection:
+                st.session_state["assign_editor_nonce"] = nonce + 1
+                st.rerun()
+
+        selection = set(st.session_state.get("assignment_selection", set()))
+        st.caption(
+            f"Zaznaczono {len(selection)} dni. "
+            "Zaznaczenie dwóch skrajnych dni w projekcie automatycznie wypełnia zakres."
+        )
+
+        from_start_col, to_end_col, clear_col = st.columns([1, 1, 2])
+        from_start = from_start_col.checkbox(
+            "Od początku",
+            key="assign_from_start",
+            help="Rozszerza zakres do najwcześniejszego startu projektu.",
+        )
+        to_end = to_end_col.checkbox(
+            "Do końca",
+            key="assign_to_end",
+            help="Rozszerza zakres do najpóźniejszego terminu projektu.",
+        )
+        if clear_col.button(
+            "Wyczyść zaznaczenie",
+            key="clear_assignment_selection",
+            disabled=not selection,
+        ):
+            st.session_state["assignment_selection"] = set()
+            st.session_state["assign_editor_nonce"] = nonce + 1
+            st.rerun()
+
+        full_col, half_col = st.columns(2)
+        assign_full = full_col.button(
+            "Przypisz pełne godziny",
+            key="assign_full_hours",
+            disabled=not selection,
+            help=(
+                f"Przypisuje min(dostępne, {effective_daily_hours:.1f} h) "
+                "na każdy zaznaczony dzień."
+            ),
+        )
+        assign_half = half_col.button(
+            "Przypisz połowę godzin",
+            key="assign_half_hours",
+            disabled=not selection,
+            help=(
+                f"Przypisuje min(dostępne, {effective_daily_hours / 2:.1f} h) "
+                "na każdy zaznaczony dzień."
+            ),
+        )
+
+        if assign_full or assign_half:
+            grouped_days: Dict[str, List[date]] = defaultdict(list)
+            for key in selection:
+                try:
+                    project_id, day_str = str(key).split("::", 1)
+                    grouped_days[project_id].append(date.fromisoformat(day_str))
+                except (ValueError, TypeError):
+                    continue
+            ranges_with_names: List[Tuple[str, str, date, date]] = []
+            for project_id, days in grouped_days.items():
+                start, end = min(days), max(days)
+                if from_start and project_id in project_ranges:
+                    start = min(start, project_ranges[project_id][0])
+                if to_end and project_id in project_ranges:
+                    end = max(end, project_ranges[project_id][1])
+                ranges_with_names.append(
+                    (project_id, project_map.get(project_id, project_id), start, end)
+                )
+
+            mode = "full" if assign_full else "half"
+            target_hours = (
+                effective_daily_hours if mode == "full" else effective_daily_hours / 2
+            )
+            created, working = assign_constructor_to_ranges(
+                assignments=assignments,
+                constructor=selected_constructor,
+                ranges_with_names=ranges_with_names,
+                mode=mode,
+                target_hours=target_hours,
+                effective_daily_hours=effective_daily_hours,
+            )
+            if not created:
+                st.warning(
+                    "Brak dostępnych godzin w zaznaczonym zakresie — "
+                    "konstruktor jest już w pełni obciążony."
+                )
+            else:
+                st.session_state["constructor_assignments"] = working
+                st.session_state["assignments_dirty"] = True
+                assigned_hours = sum(
+                    sum(float(value) for value in block["days"].values())
+                    for block in created
+                )
+                st.session_state["assignment_flash"] = (
+                    f"Przypisano {assigned_hours:.1f} h konstruktorowi "
+                    f"{selected_constructor} w {len(created)} "
+                    f"{'bloku' if len(created) == 1 else 'blokach'}."
+                )
+                st.rerun()
+
+    with st.expander("Obciążenia inne niż projekty", expanded=False):
+        st.caption(
+            "Zablokuj konstruktora na zadanie spoza listy projektów (np. szkolenie, "
+            "urlop, projekt wewnętrzny). Godziny zmniejszą jego dostępność we wszystkich "
+            "projektach."
+        )
+        if st.session_state.get("ext_constructor") not in constructors:
+            st.session_state["ext_constructor"] = constructors[0]
+        ext_constructor = st.selectbox(
+            "Konstruktor", options=constructors, key="ext_constructor"
+        )
+        ext_label = st.text_input(
+            "Nazwa zadania",
+            key="ext_label",
+            placeholder="np. Szkolenie, urlop, projekt wewnętrzny",
+        )
+        ext_range = st.date_input(
+            "Zakres dat",
+            value=(date.today(), date.today()),
+            key="ext_range",
+        )
+        if isinstance(ext_range, (tuple, list)) and len(ext_range) == 2:
+            ext_start, ext_end = ext_range
+        elif isinstance(ext_range, date):
+            ext_start = ext_end = ext_range
+        else:
+            ext_start = ext_end = date.today()
+        ext_mode = st.radio(
+            "Liczba godzin",
+            ["Pełne", "Połowa", "Własne"],
+            horizontal=True,
+            key="ext_mode",
+        )
+        custom_default = float(st.session_state.get("effective_daily_hours", 6.0))
+        ext_custom = st.number_input(
+            "Godziny dziennie",
+            min_value=0.0,
+            max_value=24.0,
+            value=custom_default,
+            step=0.5,
+            format="%.1f",
+            key="ext_custom",
+            disabled=(ext_mode != "Własne"),
+        )
+        if st.button("Dodaj obciążenie", key="ext_add"):
+            if not ext_label.strip():
+                st.error("Podaj nazwę zadania.")
+            elif ext_end < ext_start:
+                st.error("Data końcowa nie może być wcześniejsza od początkowej.")
+            else:
+                target_hours = (
+                    effective_daily_hours
+                    if ext_mode == "Pełne"
+                    else effective_daily_hours / 2
+                    if ext_mode == "Połowa"
+                    else ext_custom
+                )
+                block, working = add_external_assignment(
+                    assignments=assignments,
+                    constructor=ext_constructor,
+                    label=ext_label.strip(),
+                    start=ext_start,
+                    end=ext_end,
+                    mode="full" if ext_mode == "Pełne" else "half" if ext_mode == "Połowa" else "custom",
+                    target_hours=target_hours,
+                    effective_daily_hours=effective_daily_hours,
+                )
+                if block is None:
+                    st.warning(
+                        "Brak dostępnych godzin w wybranym zakresie — "
+                        "konstruktor jest już w pełni obciążony."
+                    )
+                else:
+                    st.session_state["constructor_assignments"] = working
+                    st.session_state["assignments_dirty"] = True
+                    assigned_hours = sum(float(value) for value in block["days"].values())
+                    st.session_state["assignment_flash"] = (
+                        f"Dodano obciążenie „{ext_label.strip()}”: "
+                        f"{assigned_hours:.1f} h."
+                    )
+                    st.rerun()
+
+    assignments = st.session_state["constructor_assignments"]
+    with st.expander("Zarządzaj przypisaniami", expanded=False):
+        if not assignments:
+            st.caption("Brak zapisanych przypisań.")
+        else:
+            summary_rows = []
+            for assignment in assignments:
+                total_hours = sum(
+                    float(value) for value in assignment.get("days", {}).values()
+                )
+                summary_rows.append(
+                    {
+                        "Typ": "Inne zadanie"
+                        if assignment.get("kind") == "external"
+                        else "Projekt",
+                        "Projekt / zadanie": assignment.get("label")
+                        or assignment.get("project")
+                        or "",
+                        "Konstruktor": assignment.get("constructor", ""),
+                        "Od": assignment.get("start_date", ""),
+                        "Do": assignment.get("end_date", ""),
+                        "Godziny": round(total_hours, 2),
+                        "Tryb": assignment.get("mode", ""),
+                    }
+                )
+            st.dataframe(
+                pd.DataFrame(summary_rows),
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "Godziny": st.column_config.NumberColumn("Godziny", format="%.2f")
+                },
+            )
+            options = {
+                assignment["id"]: (
+                    f"{assignment.get('constructor', '')} | "
+                    f"{assignment.get('label') or assignment.get('project') or ''} | "
+                    f"{assignment.get('start_date', '')}–{assignment.get('end_date', '')} | "
+                    f"{sum(float(v) for v in assignment.get('days', {}).values()):.1f} h"
+                )
+                for assignment in assignments
+            }
+            if st.session_state.get("delete_assignment_id") not in options:
+                st.session_state["delete_assignment_id"] = next(iter(options))
+            selected_assignment = st.selectbox(
+                "Wybierz przypisanie do usunięcia",
+                options=list(options.keys()),
+                format_func=lambda key: options[key],
+                key="delete_assignment_id",
+            )
+            if st.button("Usuń wybrane przypisanie", key="delete_assignment"):
+                st.session_state["constructor_assignments"] = [
+                    assignment
+                    for assignment in assignments
+                    if assignment["id"] != selected_assignment
+                ]
+                st.session_state["assignments_dirty"] = True
+                st.session_state["assignment_flash"] = "Usunięto przypisanie."
+                st.rerun()
+
+
+# ---- UI --------------------------------------------------------------------
+def render_resource_usage(
+    assignments: List[Dict[str, Any]],
+    constructors: List[str],
+    effective_daily_hours: float,
+    selected_projects: List[str],
+) -> None:
+    st.subheader("ZUŻYCIE ZASOBÓW")
+    st.caption(
+        "Obciążenie konstruktorów w projektach oraz w zadaniach spoza listy projektów. "
+        "Wykresy pokazują dzienne użycie godzin, a etykiety nad słupkami — projekty/zadania "
+        "obciążające dany dzień."
+    )
+    if st.session_state.get("assignments_dirty"):
+        st.warning(
+            "Widok obejmuje niezapisane zmiany. Przejdź do DAILY PLANNED EFFORT "
+            "i kliknij „Zapisz”, aby utrwalić je na dysku."
+        )
+
+    expanded = expand_assignment_days(assignments)
+    if expanded.empty:
+        st.info(
+            "Brak przypisań konstruktorów. Dodaj je w zakładce DAILY PLANNED EFFORT."
+        )
+        return
+
+    if selected_projects:
+        expanded = expanded[
+            (expanded["kind"] == "external")
+            | (expanded["project_id"].isin(selected_projects))
+        ]
+        if expanded.empty:
+            st.info("Brak przypisań dla wybranych projektów.")
+            return
+    else:
+        st.caption("Nie wybrano projektów — pokazuję wszystkie zapisane przypisania.")
+
+    min_date = expanded["date"].min()
+    max_date = expanded["date"].max()
+    range_sig = f"{min_date.isoformat()}::{max_date.isoformat()}"
+    if st.session_state.get("resource_usage_range_sig") != range_sig:
+        st.session_state["resource_usage_range_sig"] = range_sig
+        st.session_state["resource_usage_range"] = (min_date, max_date)
+    date_range = st.date_input(
+        "Zakres dat",
+        min_value=min_date,
+        max_value=max_date,
+        key="resource_usage_range",
+    )
+    if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
+        start_filter, end_filter = date_range
+    else:
+        start_filter, end_filter = min_date, max_date
+
+    expanded = expanded[
+        (expanded["date"] >= start_filter) & (expanded["date"] <= end_filter)
+    ]
+    if expanded.empty:
+        st.info("Brak przypisań w wybranym zakresie dat.")
+        return
+
+    present_constructors = sorted(
+        {
+            str(value).upper()
+            for value in expanded["constructor"].dropna().tolist()
+            if str(value).strip()
+        }
+    )
+    available_constructors = [
+        constructor for constructor in constructors if constructor in present_constructors
+    ] + [
+        constructor
+        for constructor in present_constructors
+        if constructor not in constructors
+    ]
+    if not available_constructors:
+        st.info("Brak konstruktorów w przypisaniach.")
+        return
+    if "resource_usage_constructors" not in st.session_state:
+        st.session_state["resource_usage_constructors"] = available_constructors
+    else:
+        st.session_state["resource_usage_constructors"] = [
+            item
+            for item in st.session_state["resource_usage_constructors"]
+            if item in available_constructors
+        ]
+        if not st.session_state["resource_usage_constructors"]:
+            st.session_state["resource_usage_constructors"] = available_constructors
+    selected_constructors = st.multiselect(
+        "Konstruktorzy",
+        options=available_constructors,
+        key="resource_usage_constructors",
+    )
+    if not selected_constructors:
+        st.info("Zaznacz co najmniej jednego konstruktora.")
+        return
+
+    expanded = expanded[expanded["constructor"].isin(selected_constructors)].copy()
+    expanded["category"] = [
+        f"Inne: {row['label']}" if row["kind"] == "external" else row["project"]
+        for _, row in expanded.iterrows()
+    ]
+    expanded["category_short"] = expanded["category"].map(short_label)
+
+    label_df = (
+        expanded.groupby(["date", "constructor"], as_index=False)
+        .agg(
+            total_hours=("hours", "sum"),
+            projects=(
+                "category",
+                lambda values: ", ".join(sorted({short_label(value, 18) for value in values})),
+            ),
+        )
+    )
+
+    tabs = st.tabs(selected_constructors)
+    for tab, constructor in zip(tabs, selected_constructors):
+        with tab:
+            con_df = expanded[expanded["constructor"] == constructor]
+            con_labels = label_df[label_df["constructor"] == constructor]
+            if con_df.empty:
+                st.info("Brak danych dla tego konstruktora.")
+                continue
+
+            bars = (
+                alt.Chart(con_df)
+                .mark_bar()
+                .encode(
+                    x=alt.X("date:T", title="Dzień"),
+                    y=alt.Y("hours:Q", title="Godziny", stack="zero"),
+                    color=alt.Color("category_short:N", title="Projekt / zadanie"),
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Dzień", format="%d.%m.%Y"),
+                        alt.Tooltip("category:N", title="Projekt / zadanie"),
+                        alt.Tooltip("hours:Q", title="Godziny", format=".2f"),
+                    ],
+                )
+            )
+            labels = (
+                alt.Chart(con_labels)
+                .mark_text(angle=270, dx=-4, dy=0, fontSize=8, color="#444")
+                .encode(
+                    x=alt.X("date:T", title="Dzień"),
+                    y=alt.Y("total_hours:Q", title=None),
+                    text=alt.Text("projects:N"),
+                )
+            )
+            st.altair_chart(
+                (bars + labels).properties(height=360, width="container"),
+                use_container_width=True,
+            )
+
+            total_h = float(con_df["hours"].sum())
+            workdays = int(pd.bdate_range(start_filter, end_filter).size)
+            capacity = float(effective_daily_hours) * workdays
+            utilization = (total_h / capacity * 100) if capacity > 0 else 0.0
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Suma godzin", f"{total_h:.1f} h")
+            c2.metric("Dni z obciążeniem", con_df["date"].nunique())
+            c3.metric(
+                "Wykorzystanie",
+                f"{utilization:.0f}%",
+                help=(
+                    f"{total_h:.1f} h / ({effective_daily_hours:.1f} h × "
+                    f"{workdays} dni roboczych) = {utilization:.1f}%"
+                ),
+            )
+
+            detail = (
+                con_df.groupby(["date", "category"], as_index=False)["hours"]
+                .sum()
+                .sort_values(["date", "category"])
+            )
+            detail["Dzień"] = detail["date"].apply(
+                lambda value: value.strftime("%d.%m.%Y")
+            )
+            detail = detail.rename(
+                columns={"category": "Projekt / zadanie", "hours": "Godziny"}
+            )[["Dzień", "Projekt / zadanie", "Godziny"]]
+            st.dataframe(
+                detail,
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "Godziny": st.column_config.NumberColumn("Godziny", format="%.2f")
+                },
+            )
+
+
 def main() -> None:
     st.set_page_config(page_title="Wrike KPI – Core Items", layout="wide")
     reset_logs()
     reset_perf_metrics()
     check_password()
+    _init_resource_state()
     st.title("KPI DASHBOARD")
 
-    st.session_state.setdefault("page", "KPI DASHBOARD")
+    pages = ["KPI DASHBOARD", "DAILY PLANNED EFFORT", "ZUŻYCIE ZASOBÓW"]
+    st.session_state.setdefault("page", pages[0])
 
     with st.sidebar:
-        page = st.radio(
-            "Widok",
-            ["KPI DASHBOARD", "DAILY PLANNED EFFORT"],
-            index=0 if st.session_state.get("page") == "KPI DASHBOARD" else 1,
-        )
+        current_page = st.session_state.get("page", pages[0])
+        page_index = pages.index(current_page) if current_page in pages else 0
+        page = st.radio("Widok", pages, index=page_index)
         st.session_state["page"] = page
         st.divider()
         st.radio("Filtruj zadania", ["ALL", "\u2622 BOM"], horizontal=True, key="task_filter")
@@ -1486,6 +2488,28 @@ def main() -> None:
         planned_field_id = DEFAULT_PLANNED_FIELD_ID
         completed_status_id = DEFAULT_COMPLETED_STATUS_ID
         st.caption("Parametry ładowane z .env.")
+        st.header("Konstruktorzy")
+        with st.form("constructors_form"):
+            constructors_text = st.text_input(
+                "Inicjały (po przecinku)",
+                value=", ".join(st.session_state.get("constructors", [])),
+                help=(
+                    "Każdy konstruktor ma dziennie tyle godzin, ile wynosi pole "
+                    "„Efektywne godziny dziennie”."
+                ),
+            )
+            if st.form_submit_button("Zapisz konstruktorów"):
+                parsed_constructors = parse_constructors(constructors_text)
+                if not parsed_constructors:
+                    st.error("Podaj co najmniej jednego konstruktora.")
+                else:
+                    st.session_state["constructors"] = parsed_constructors
+                    save_constructors(parsed_constructors)
+                    st.success("Zapisano listę konstruktorów.")
+        if st.session_state.get("constructors"):
+            st.caption(
+                "Pula: " + ", ".join(st.session_state["constructors"])
+            )
         if "refresh_timestamp" not in st.session_state:
             st.session_state["refresh_timestamp"] = None
         if "refresh_nonce" not in st.session_state:
@@ -1525,6 +2549,15 @@ def main() -> None:
         default=default_selection,
         format_func=lambda pid: project_map[pid],
     )
+
+    if st.session_state["page"] == "ZUŻYCIE ZASOBÓW":
+        render_resource_usage(
+            assignments=st.session_state["constructor_assignments"],
+            constructors=st.session_state["constructors"],
+            effective_daily_hours=float(st.session_state["effective_daily_hours"]),
+            selected_projects=selected_projects,
+        )
+        return
 
     if not selected_projects:
         st.info("Zaznacz przynajmniej jeden projekt, aby zobaczyć KPI.")
@@ -1597,6 +2630,23 @@ def main() -> None:
         core_df = pd.concat([task_df, bom_df], ignore_index=True)
         daily_df = compute_daily_allocated_effort(core_df)
 
+        prev_daily = float(st.session_state.get("effective_daily_hours", 6.0))
+        effective_daily_h = st.number_input(
+            "Efektywne godziny dziennie",
+            min_value=0.0,
+            max_value=24.0,
+            value=prev_daily,
+            step=0.5,
+            format="%.1f",
+            help=(
+                "Efektywna liczba godzin pracy dziennie. Każdy konstruktor ma "
+                "dziennie tyle godzin dostępnych, ile wynosi ta wartość."
+            ),
+        )
+        if effective_daily_h != prev_daily:
+            st.session_state["effective_daily_hours"] = effective_daily_h
+            _write_json_file(DAILY_HOURS_FILE, effective_daily_h)
+
         if daily_df.empty:
             st.info(
                 "Brak danych – żaden core item nie ma jednocześnie "
@@ -1605,7 +2655,6 @@ def main() -> None:
         else:
             min_date = daily_df["date"].min()
             max_date = daily_df["date"].max()
-            default_start = min_date
 
             projects_sig = hashlib.md5(
                 json.dumps(sorted(selected_projects), sort_keys=True).encode("utf-8")
@@ -1614,7 +2663,7 @@ def main() -> None:
             # Reset zakresu dat przy każdej zmianie zestawu projektów.
             if st.session_state.get("daily_effort_projects_sig") != projects_sig:
                 st.session_state["daily_effort_projects_sig"] = projects_sig
-                st.session_state["daily_effort_range"] = (default_start, max_date)
+                st.session_state["daily_effort_range"] = (min_date, max_date)
 
             date_range = st.date_input(
                 "Zakres dat",
@@ -1634,43 +2683,81 @@ def main() -> None:
             if filtered_df.empty:
                 st.info("Brak danych w wybranym zakresie dat.")
             else:
-                st.session_state.setdefault("team_members", _read_json_file(TEAM_MEMBERS_FILE, 0))
-                prev_members = st.session_state["team_members"]
-                team_members = st.number_input("Team members (osoby)", min_value=0, value=prev_members, step=1)
-                if team_members != prev_members:
-                    st.session_state["team_members"] = team_members
-                    _write_json_file(TEAM_MEMBERS_FILE, team_members)
-
-                st.session_state.setdefault(
-                    "effective_daily_hours", _read_json_file(DAILY_HOURS_FILE, 6.0)
-                )
-                prev_daily = st.session_state["effective_daily_hours"]
-                effective_daily_h = st.number_input(
-                    "Efektywne godziny dziennie",
-                    min_value=0.0,
-                    max_value=24.0,
-                    value=prev_daily,
-                    step=0.5,
-                    format="%.1f",
-                    help=(
-                        "Efektywna liczba godzin pracy dziennie używana "
-                        "do przeliczenia planned effort na dni i dostępnych godzin."
-                    ),
-                )
-                if effective_daily_h != prev_daily:
-                    st.session_state["effective_daily_hours"] = effective_daily_h
-                    _write_json_file(DAILY_HOURS_FILE, effective_daily_h)
-
-                total_h = filtered_df["daily_hours"].sum()
+                total_h = float(filtered_df["daily_hours"].sum())
                 n_dates = filtered_df["date"].nunique()
                 n_items = filtered_df["title"].nunique()
                 workdays_in_range = int(pd.bdate_range(start_filter, end_filter).size)
-                available_h = effective_daily_h * workdays_in_range
+
+                assignments = st.session_state["constructor_assignments"]
+                expanded_assignments = expand_assignment_days(
+                    assignments, start_filter, end_filter
+                )
+                if expanded_assignments.empty:
+                    relevant_assignments = expanded_assignments
+                else:
+                    relevant_assignments = expanded_assignments[
+                        (expanded_assignments["kind"] == "external")
+                        | (expanded_assignments["project_id"].isin(selected_projects))
+                    ]
+                available_h = (
+                    float(relevant_assignments["hours"].sum())
+                    if not relevant_assignments.empty
+                    else 0.0
+                )
+                assigned_project_h = (
+                    float(
+                        relevant_assignments[
+                            relevant_assignments["kind"] == "project"
+                        ]["hours"].sum()
+                    )
+                    if not relevant_assignments.empty
+                    else 0.0
+                )
+                assigned_external_h = (
+                    float(
+                        relevant_assignments[
+                            relevant_assignments["kind"] == "external"
+                        ]["hours"].sum()
+                    )
+                    if not relevant_assignments.empty
+                    else 0.0
+                )
+
+                capacity_per_person = effective_daily_h * workdays_in_range
+                if capacity_per_person > 0:
+                    full_people = int(math.floor(total_h / capacity_per_person + 1e-9))
+                    remainder_hours = max(
+                        0.0, total_h - full_people * capacity_per_person
+                    )
+                    required_label = format_required_constructors(
+                        full_people, remainder_hours
+                    )
+                else:
+                    full_people = 0
+                    remainder_hours = 0.0
+                    required_label = "—"
+
                 average_daily_h = total_h / workdays_in_range if workdays_in_range else 0.0
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Suma / dostępne godz.", f"{total_h:.0f} / {available_h:.0f}")
+                c1.metric(
+                    "Suma / dostępne godz.",
+                    f"{total_h:.0f} / {available_h:.0f}",
+                    help=(
+                        "Dostępne godziny to suma godzin przypisanych konstruktorom "
+                        "(projekty + inne zadania) w wybranym zakresie dat."
+                    ),
+                )
                 c2.metric("Dni roboczych", n_dates)
                 c3.metric("Core itemów", n_items)
+                st.caption(
+                    f"Przypisania w zakresie: projekty {assigned_project_h:.1f} h, "
+                    f"inne zadania {assigned_external_h:.1f} h."
+                )
+                if available_h <= 0:
+                    st.caption(
+                        "Brak przypisań konstruktorów w tym zakresie — "
+                        "dostępne godziny wynoszą 0."
+                    )
 
                 st.subheader("Planned effort visualisation")
                 pivot = filtered_df.pivot_table(
@@ -1680,21 +2767,41 @@ def main() -> None:
                     aggfunc="sum",
                     fill_value=0,
                 )
-                long_chart = pivot.reset_index().melt(id_vars=["date"], var_name="project", value_name="daily_hours")
+                long_chart = pivot.reset_index().melt(
+                    id_vars=["date"], var_name="project", value_name="daily_hours"
+                )
                 bars = alt.Chart(long_chart).mark_bar().encode(
                     x=alt.X("date:T", title="Date"),
                     y=alt.Y("daily_hours:Q", title="Godziny"),
                     color=alt.Color("project:N", title="Project"),
                 )
                 chart = bars
-                if team_members > 0 and effective_daily_h > 0:
-                    capacity_h = team_members * effective_daily_h
-                    rule = alt.Chart(pd.DataFrame({"y": [capacity_h]})).mark_rule(color="red", strokeWidth=2).encode(y="y")
-                    chart = bars + rule
+                if not relevant_assignments.empty:
+                    line_df = (
+                        relevant_assignments.groupby("date", as_index=False)["hours"]
+                        .sum()
+                    )
+                    line = alt.Chart(line_df).mark_line(
+                        point=True, color="#d32f2f", strokeWidth=2
+                    ).encode(
+                        x=alt.X("date:T", title="Date"),
+                        y=alt.Y("hours:Q", title="Godziny"),
+                        tooltip=[
+                            alt.Tooltip("date:T", title="Dzień", format="%d.%m.%Y"),
+                            alt.Tooltip("hours:Q", title="Przypisane godziny", format=".2f"),
+                        ],
+                    )
+                    chart = bars + line
+
                 chart_col, average_col = st.columns([4, 1])
                 chart_col.altair_chart(
                     chart.properties(width="container"), use_container_width=True
                 )
+                if not relevant_assignments.empty:
+                    st.caption(
+                        "Czerwona linia = suma godzin przypisanych konstruktorom "
+                        "(projekty + inne zadania) na dany dzień."
+                    )
                 with average_col:
                     st.metric(
                         "Średnie obciążenie",
@@ -1706,103 +2813,34 @@ def main() -> None:
                         ),
                     )
 
-                    days_needed = (
-                        math.ceil(total_h / effective_daily_h)
-                        if effective_daily_h and effective_daily_h > 0
-                        else 0
+                    remainder_text = (
+                        f" i {_polish_hours_label(remainder_hours)}"
+                        if remainder_hours >= 0.5
+                        else ""
                     )
                     st.metric(
-                        "Wymagane dni",
-                        f"{days_needed}",
+                        "Wymagani konstruktorzy",
+                        required_label,
                         help=(
-                            f"{total_h:.2f} h planned effort w zakresie podzielone przez "
-                            f"{effective_daily_h:.1f} h dziennie, zaokrąglone w górę do pełnych dni."
+                            f"Pojemność jednej osoby: {effective_daily_h:.1f} h × "
+                            f"{workdays_in_range} dni roboczych = "
+                            f"{capacity_per_person:.1f} h. "
+                            f"{total_h:.1f} h planu = "
+                            f"{_polish_person_label(full_people)} full"
+                            f"{remainder_text}."
                         ),
                     )
 
-                st.subheader("Wybierz dni do analizy")
-                st.caption(
-                    "Zaznacz jeden lub kilka dni — poniżej zobaczysz, które taski "
-                    "i w jakim wymiarze obciążają każdy z nich."
-                )
-                date_options = (
-                    filtered_df.groupby("date", as_index=False)
-                    .agg(daily_hours=("daily_hours", "sum"))
-                    .sort_values("date")
-                )
-                date_options["date_str"] = date_options["date"].apply(
-                    lambda d: d.strftime("%d.%m.%Y")
-                )
-                date_options["selected"] = False
-                date_options = date_options[["date_str", "daily_hours", "selected"]]
-                selected_dates_df = st.data_editor(
-                    date_options,
-                    column_config={
-                        "date_str": st.column_config.TextColumn("Dzień"),
-                        "daily_hours": st.column_config.NumberColumn(
-                            "Łączne obciążenie (h)", format="%.2f"
-                        ),
-                        "selected": st.column_config.CheckboxColumn(
-                            "Wybierz",
-                            help="Zaznacz dni, dla których chcesz zobaczyć listę tasków.",
-                            default=False,
-                        ),
-                    },
-                    disabled=["date_str", "daily_hours"],
-                    hide_index=True,
-                    num_rows="fixed",
-                    key=f"daily_effort_dates_{start_filter}_{end_filter}",
-                    width="stretch",
-                )
-
-                selected_date_labels = selected_dates_df.loc[
-                    selected_dates_df["selected"].fillna(False), "date_str"
-                ].tolist()
-                if not selected_date_labels:
-                    st.info("Zaznacz co najmniej jeden dzień, aby zobaczyć obciążające go taski.")
-                else:
-                    selected_days = set(selected_date_labels)
-                    selected_detail = filtered_df[
-                        filtered_df["date_str"].isin(selected_days)
-                    ]
-                    detail = (
-                        selected_detail.groupby(
-                            ["date", "project", "title", "task_id"], as_index=False
-                        )
-                        .agg(
-                            planned_hours=("planned_hours", "first"),
-                            start_date=("start_date", "first"),
-                            due_date=("due_date", "first"),
-                            daily_hours=("daily_hours", "sum"),
-                        )
-                        .sort_values(
-                            ["date", "daily_hours", "project", "title"],
-                            ascending=[True, False, True, True],
-                        )
-                    )
-                    detail["date_str"] = detail["date"].apply(
-                        lambda d: d.strftime("%d.%m.%Y")
-                    )
-                    detail = detail.drop(columns=["date", "task_id"])
-                    st.subheader("Taski obciążające wybrane dni")
-                    st.dataframe(
-                        detail,
-                        column_config={
-                            "date_str": "Dzień",
-                            "project": "Projekt",
-                            "title": "Task",
-                            "start_date": st.column_config.DateColumn("Start"),
-                            "due_date": st.column_config.DateColumn("Koniec"),
-                            "planned_hours": st.column_config.NumberColumn(
-                                "Planned effort (h)", format="%.0f"
-                            ),
-                            "daily_hours": st.column_config.NumberColumn(
-                                "Obciążenie tego dnia (h)", format="%.2f"
-                            ),
-                        },
-                        hide_index=True,
-                        width="stretch",
-                    )
+        render_resource_planning_section(
+            core_df=core_df,
+            daily_df=daily_df,
+            project_map=project_map,
+            selected_projects=selected_projects,
+            constructors=st.session_state.get("constructors", []),
+            effective_daily_hours=float(
+                st.session_state.get("effective_daily_hours", 6.0)
+            ),
+        )
 
         with st.expander("Log (debug)"):
             _init_logs()
