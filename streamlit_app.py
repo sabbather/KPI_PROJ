@@ -3507,11 +3507,6 @@ def main() -> None:
                         (expanded_assignments["kind"] == "external")
                         | (expanded_assignments["project_id"].isin(selected_projects))
                     ]
-                available_h = (
-                    float(relevant_assignments["hours"].sum())
-                    if not relevant_assignments.empty
-                    else 0.0
-                )
                 assigned_project_h = (
                     float(
                         relevant_assignments[
@@ -3555,11 +3550,12 @@ def main() -> None:
                 average_daily_h = total_h / workdays_in_range if workdays_in_range else 0.0
                 c1, c2, c3 = st.columns(3)
                 c1.metric(
-                    "Suma / dostępne godz.",
-                    f"{total_h:.0f} / {available_h:.0f}",
+                    "Plan / przypisane godz.",
+                    f"{total_h:.0f} / {assigned_project_h:.0f}",
                     help=(
-                        "Dostępne godziny to suma godzin przypisanych konstruktorom "
-                        "(projekty + inne zadania) w wybranym zakresie dat."
+                        "Planowane godziny / godziny przypisane do wybranych "
+                        "projektów w wybranym zakresie dat. Inne zadania są "
+                        "pokazane osobno i nie są wliczane do tej wartości."
                     ),
                 )
                 c2.metric("Dni roboczych", n_dates)
@@ -3568,10 +3564,14 @@ def main() -> None:
                     f"Przypisania w zakresie: projekty {assigned_project_h:.1f} h, "
                     f"inne zadania {assigned_external_h:.1f} h."
                 )
-                if available_h <= 0:
+                if assigned_project_h <= 0 and assigned_external_h <= 0:
                     st.caption(
-                        "Brak przypisań konstruktorów w tym zakresie — "
-                        "dostępne godziny wynoszą 0."
+                        "Brak przypisań konstruktorów w tym zakresie."
+                    )
+                elif assigned_project_h <= 0:
+                    st.caption(
+                        "Brak przypisań do wybranych projektów — "
+                        "w zakresie są tylko inne zadania."
                     )
 
                 st.subheader("Planned effort visualisation")
@@ -3626,7 +3626,6 @@ def main() -> None:
                         )
                 elif assigned_external_h > 0:
                     st.caption(
-                        "Brak przypisań do wybranych projektów. "
                         f"Inne zadania poza projektami: "
                         f"{assigned_external_h:.1f} h."
                     )
