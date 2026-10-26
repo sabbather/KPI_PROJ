@@ -15,6 +15,7 @@ Environment (.env):
 from __future__ import annotations
 
 import json
+import math
 import os
 import hashlib
 import time
@@ -64,7 +65,8 @@ KPI_AGG_CACHE_TTL_SEC = int(os.getenv("KPI_AGG_CACHE_TTL_SEC", "3600"))
 SOLIDWORKS_CACHE_FILE = Path(".cache") / "solidworks_cache.json"
 WRIKE_COMMENTS_CACHE_FILE = Path(".cache") / "wrike_comments_cache.json"
 WRIKE_DATA_CACHE_FILE = Path(".cache") / "wrike_data_cache.json"
-TEAM_EFFORT_FILE = Path(".cache") / "team_effort.json"
+TEAM_MEMBERS_FILE = Path(".cache") / "team_members.json"
+DAILY_HOURS_FILE = Path(".cache") / "daily_hours.json"
 COMPLETED_OVERRIDES_FILE = Path(".cache") / "completed_overrides.json"
 
 
@@ -477,6 +479,56 @@ def _to_date_only(value: Any) -> Optional[date]:
     return None
 
 
+def compute_kpi1_score(
+    start_date: Any,
+    due_date: Any,
+    completed: bool,
+    completed_date: Any,
+    tolerance_pct: float,
+) -> Optional[float]:
+    """Score a BOM item's delivery time from 0 to 1; None means insufficient dates."""
+    if not completed:
+        return None
+
+    start_day = _to_date_only(start_date)
+    due_day = _to_date_only(due_date)
+    if start_day is None or due_day is None:
+        return None
+
+    planned_days = (due_day - start_day).days
+    if planned_days <= 0:
+        return None
+
+    effective_day = _to_date_only(completed_date)
+    if effective_day is None:
+        return None
+
+    elapsed_days = max(0, (effective_day - start_day).days)
+    if elapsed_days <= planned_days:
+        return 1.0
+
+    tolerance = max(0.0, float(tolerance_pct)) / 100.0
+    if tolerance == 0:
+        return 0.0
+
+    zero_score_days = planned_days * (1.0 + tolerance)
+    if elapsed_days >= zero_score_days:
+        return 0.0
+
+    return (zero_score_days - elapsed_days) / (zero_score_days - planned_days)
+
+
+def weighted_hours_ratio(used_hours: pd.Series, planned_hours: pd.Series) -> float:
+    """Return total used / total planned hours, ignoring missing or non-positive plans."""
+    used = pd.to_numeric(used_hours, errors="coerce")
+    planned = pd.to_numeric(planned_hours, errors="coerce")
+    valid = used.notna() & planned.gt(0)
+    planned_total = planned[valid].sum()
+    if planned_total <= 0:
+        return 0.0
+    return round(float(used[valid].sum() / planned_total), 2)
+
+
 def due_symbol(due_flag: Any, completed_flag: Any, completed_date: Any, due_date: Any) -> str:
     if due_flag is True and completed_flag is False:
         return "⚠️"
@@ -515,7 +567,10 @@ def compute_daily_allocated_effort(df: pd.DataFrame) -> pd.DataFrame:
                 "date_str": d.strftime("%d.%m.%Y"),
                 "project": row.get("project", ""),
                 "title": row.get("title", ""),
+                "task_id": row.get("id", ""),
                 "planned_hours": planned,
+                "start_date": start,
+                "due_date": due,
                 "daily_hours": round(daily, 2),
             })
     return pd.DataFrame(rows)
@@ -1405,6 +1460,23 @@ def main() -> None:
         st.radio("Status", ["ALL", "COMPLETED"], horizontal=True, key="status_filter")
         kpi_date_from = st.date_input("KPI due od", value=None, key="kpi_date_from")
         kpi_date_to = st.date_input("KPI due do", value=None, key="kpi_date_to")
+        kpi1_tolerance_pct = st.number_input(
+            "Tolerancja opóźnienia KPI 1 (%)",
+            min_value=0,
+            max_value=100,
+            value=20,
+            step=1,
+            key="kpi1_tolerance_pct",
+            help=(
+                "Po przekroczeniu zaplanowanego czasu ocena maleje liniowo. "
+                "Przy tolerancji 20% wynik spada do zera po przekroczeniu planu o 20%."
+            ),
+        )
+        st.caption(
+            "Legenda: 1 = wykonanie w planowanym czasie; między planem a końcem tolerancji "
+            "ocena liniowo spada; po przekroczeniu tego progu = 0. "
+            "Otwarte zadania nie są oceniane ani wliczane do średniej."
+        )
         st.header("Konfiguracja")
         base_url = DEFAULT_BASE_URL
         api_key = DEFAULT_API_KEY
@@ -1533,13 +1605,22 @@ def main() -> None:
         else:
             min_date = daily_df["date"].min()
             max_date = daily_df["date"].max()
-            default_start = max(min_date, date.today() - timedelta(days=7))
+            default_start = min_date
+
+            projects_sig = hashlib.md5(
+                json.dumps(sorted(selected_projects), sort_keys=True).encode("utf-8")
+            ).hexdigest()[:8]
+
+            # Reset zakresu dat przy każdej zmianie zestawu projektów.
+            if st.session_state.get("daily_effort_projects_sig") != projects_sig:
+                st.session_state["daily_effort_projects_sig"] = projects_sig
+                st.session_state["daily_effort_range"] = (default_start, max_date)
 
             date_range = st.date_input(
                 "Zakres dat",
-                value=(default_start, max_date),
                 min_value=min_date,
                 max_value=max_date,
+                key="daily_effort_range",
             )
             if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
                 start_filter, end_filter = date_range
@@ -1553,18 +1634,39 @@ def main() -> None:
             if filtered_df.empty:
                 st.info("Brak danych w wybranym zakresie dat.")
             else:
-                st.session_state.setdefault("team_effort", _read_json_file(TEAM_EFFORT_FILE, 0))
-                prev_effort = st.session_state["team_effort"]
-                team_effort = st.number_input("Team Effort (h)", min_value=0, value=prev_effort, step=1)
-                if team_effort != prev_effort:
-                    st.session_state["team_effort"] = team_effort
-                    _write_json_file(TEAM_EFFORT_FILE, team_effort)
+                st.session_state.setdefault("team_members", _read_json_file(TEAM_MEMBERS_FILE, 0))
+                prev_members = st.session_state["team_members"]
+                team_members = st.number_input("Team members (osoby)", min_value=0, value=prev_members, step=1)
+                if team_members != prev_members:
+                    st.session_state["team_members"] = team_members
+                    _write_json_file(TEAM_MEMBERS_FILE, team_members)
+
+                st.session_state.setdefault(
+                    "effective_daily_hours", _read_json_file(DAILY_HOURS_FILE, 6.0)
+                )
+                prev_daily = st.session_state["effective_daily_hours"]
+                effective_daily_h = st.number_input(
+                    "Efektywne godziny dziennie",
+                    min_value=0.0,
+                    max_value=24.0,
+                    value=prev_daily,
+                    step=0.5,
+                    format="%.1f",
+                    help=(
+                        "Efektywna liczba godzin pracy dziennie używana "
+                        "do przeliczenia planned effort na dni i dostępnych godzin."
+                    ),
+                )
+                if effective_daily_h != prev_daily:
+                    st.session_state["effective_daily_hours"] = effective_daily_h
+                    _write_json_file(DAILY_HOURS_FILE, effective_daily_h)
 
                 total_h = filtered_df["daily_hours"].sum()
                 n_dates = filtered_df["date"].nunique()
                 n_items = filtered_df["title"].nunique()
-                workdays_in_range = int(pd.bdate_range(start_filter, end_filter).size) if team_effort > 0 else 0
-                available_h = team_effort * workdays_in_range
+                workdays_in_range = int(pd.bdate_range(start_filter, end_filter).size)
+                available_h = effective_daily_h * workdays_in_range
+                average_daily_h = total_h / workdays_in_range if workdays_in_range else 0.0
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Suma / dostępne godz.", f"{total_h:.0f} / {available_h:.0f}")
                 c2.metric("Dni roboczych", n_dates)
@@ -1585,42 +1687,122 @@ def main() -> None:
                     color=alt.Color("project:N", title="Project"),
                 )
                 chart = bars
-                if team_effort > 0:
-                    rule = alt.Chart(pd.DataFrame({"y": [team_effort]})).mark_rule(color="red", strokeWidth=2).encode(y="y")
+                if team_members > 0 and effective_daily_h > 0:
+                    capacity_h = team_members * effective_daily_h
+                    rule = alt.Chart(pd.DataFrame({"y": [capacity_h]})).mark_rule(color="red", strokeWidth=2).encode(y="y")
                     chart = bars + rule
-                st.altair_chart(chart.properties(width="container"), use_container_width=True)
-
-                st.subheader("Szczegóły")
-                detail = (
-                    filtered_df.groupby(
-                        ["date", "project", "title"], as_index=False
-                    )
-                    .agg(
-                        planned_hours=("planned_hours", "first"),
-                        daily_hours=("daily_hours", "sum"),
-                    )
-                    .sort_values(["date", "project", "title"])
+                chart_col, average_col = st.columns([4, 1])
+                chart_col.altair_chart(
+                    chart.properties(width="container"), use_container_width=True
                 )
-                detail["date_str"] = detail["date"].apply(
+                with average_col:
+                    st.metric(
+                        "Średnie obciążenie",
+                        f"{average_daily_h:.1f}".replace(".", ",") + " h/dzień",
+                        help=(
+                            f"{total_h:.2f} h łącznie podzielone przez "
+                            f"{workdays_in_range} dni roboczych w wybranym zakresie. "
+                            "Uwzględnia także dni robocze bez zaplanowanego obciążenia."
+                        ),
+                    )
+
+                    days_needed = (
+                        math.ceil(total_h / effective_daily_h)
+                        if effective_daily_h and effective_daily_h > 0
+                        else 0
+                    )
+                    st.metric(
+                        "Wymagane dni",
+                        f"{days_needed}",
+                        help=(
+                            f"{total_h:.2f} h planned effort w zakresie podzielone przez "
+                            f"{effective_daily_h:.1f} h dziennie, zaokrąglone w górę do pełnych dni."
+                        ),
+                    )
+
+                st.subheader("Wybierz dni do analizy")
+                st.caption(
+                    "Zaznacz jeden lub kilka dni — poniżej zobaczysz, które taski "
+                    "i w jakim wymiarze obciążają każdy z nich."
+                )
+                date_options = (
+                    filtered_df.groupby("date", as_index=False)
+                    .agg(daily_hours=("daily_hours", "sum"))
+                    .sort_values("date")
+                )
+                date_options["date_str"] = date_options["date"].apply(
                     lambda d: d.strftime("%d.%m.%Y")
                 )
-                detail = detail.drop(columns=["date"])
-                st.dataframe(
-                    detail,
+                date_options["selected"] = False
+                date_options = date_options[["date_str", "daily_hours", "selected"]]
+                selected_dates_df = st.data_editor(
+                    date_options,
                     column_config={
-                        "date_str": "Date",
-                        "project": "Client Project",
-                        "title": "Core Item",
-                        "planned_hours": st.column_config.NumberColumn(
-                            "Planned (h)", format="%.0f"
-                        ),
+                        "date_str": st.column_config.TextColumn("Dzień"),
                         "daily_hours": st.column_config.NumberColumn(
-                            "Daily (h)", format="%.2f"
+                            "Łączne obciążenie (h)", format="%.2f"
+                        ),
+                        "selected": st.column_config.CheckboxColumn(
+                            "Wybierz",
+                            help="Zaznacz dni, dla których chcesz zobaczyć listę tasków.",
+                            default=False,
                         ),
                     },
+                    disabled=["date_str", "daily_hours"],
                     hide_index=True,
-                    width='stretch',
+                    num_rows="fixed",
+                    key=f"daily_effort_dates_{start_filter}_{end_filter}",
+                    width="stretch",
                 )
+
+                selected_date_labels = selected_dates_df.loc[
+                    selected_dates_df["selected"].fillna(False), "date_str"
+                ].tolist()
+                if not selected_date_labels:
+                    st.info("Zaznacz co najmniej jeden dzień, aby zobaczyć obciążające go taski.")
+                else:
+                    selected_days = set(selected_date_labels)
+                    selected_detail = filtered_df[
+                        filtered_df["date_str"].isin(selected_days)
+                    ]
+                    detail = (
+                        selected_detail.groupby(
+                            ["date", "project", "title", "task_id"], as_index=False
+                        )
+                        .agg(
+                            planned_hours=("planned_hours", "first"),
+                            start_date=("start_date", "first"),
+                            due_date=("due_date", "first"),
+                            daily_hours=("daily_hours", "sum"),
+                        )
+                        .sort_values(
+                            ["date", "daily_hours", "project", "title"],
+                            ascending=[True, False, True, True],
+                        )
+                    )
+                    detail["date_str"] = detail["date"].apply(
+                        lambda d: d.strftime("%d.%m.%Y")
+                    )
+                    detail = detail.drop(columns=["date", "task_id"])
+                    st.subheader("Taski obciążające wybrane dni")
+                    st.dataframe(
+                        detail,
+                        column_config={
+                            "date_str": "Dzień",
+                            "project": "Projekt",
+                            "title": "Task",
+                            "start_date": st.column_config.DateColumn("Start"),
+                            "due_date": st.column_config.DateColumn("Koniec"),
+                            "planned_hours": st.column_config.NumberColumn(
+                                "Planned effort (h)", format="%.0f"
+                            ),
+                            "daily_hours": st.column_config.NumberColumn(
+                                "Obciążenie tego dnia (h)", format="%.2f"
+                            ),
+                        },
+                        hide_index=True,
+                        width="stretch",
+                    )
 
         with st.expander("Log (debug)"):
             _init_logs()
@@ -1706,25 +1888,35 @@ def main() -> None:
         planned_missing = summary["planned_missing"]
         ratio_total = round(alloc_h / planned_h * 100) if planned_h > 0 else None
 
-    # KPI 1: Zakończone / Planowane (BOM)
+    # KPI 1: average delivery-time score for completed BOM items due today or earlier.
     if not bom_df_kpi.empty:
-        kpi1_completed = int(bom_df_kpi["completed"].sum())
-        kpi1_total = len(bom_df_kpi)
+        due_past = (
+            bom_df_kpi[bom_df_kpi["due_today_or_past"] == True]
+            if "due_today_or_past" in bom_df_kpi
+            else pd.DataFrame()
+        )
     else:
-        kpi1_completed = 0
-        kpi1_total = 0
-    kpi1_pct = 0 if kpi1_total == 0 else int(round(kpi1_completed / kpi1_total * 100))
-    kpi1_val = round(kpi1_completed / kpi1_total, 2) if kpi1_total > 0 else 0.0
-    due_past = bom_df_kpi[bom_df_kpi["due_today_or_past"] == True] if not bom_df_kpi.empty and "due_today_or_past" in bom_df_kpi else pd.DataFrame()
-    kpi1_raw_completed = int(due_past["completed"].sum()) if not due_past.empty else 0
-    kpi1_raw_total = len(due_past)
+        due_past = pd.DataFrame()
+    kpi1_scores = []
+    for _, row in due_past.iterrows():
+        score = compute_kpi1_score(
+            start_date=row.get("start_date"),
+            due_date=row.get("due_date"),
+            completed=bool(row.get("completed", False)),
+            completed_date=row.get("completed_date"),
+            tolerance_pct=kpi1_tolerance_pct,
+        )
+        if score is not None:
+            kpi1_scores.append(score)
+    kpi1_val = round(sum(kpi1_scores) / len(kpi1_scores), 2) if kpi1_scores else 0.0
 
-    # KPI 2: avg alloc/planned for completed BOM / 100
+    # KPI 2: weighted used/planned ratio for completed BOM items.
     completed_bom = bom_df_kpi[bom_df_kpi["completed"] == True] if not bom_df_kpi.empty and "completed" in bom_df_kpi else pd.DataFrame()
     if not completed_bom.empty:
-        ratios = completed_bom["allocated_hours"] / completed_bom["planned_hours"]
-        ratios = ratios.replace([float("inf"), float("-inf")], None).dropna()
-        kpi2 = round(ratios.mean(), 2) if not ratios.empty else 0.0
+        kpi2 = weighted_hours_ratio(
+            completed_bom.get("used_hours_until_yesterday", pd.Series(dtype=float)),
+            completed_bom.get("planned_hours", pd.Series(dtype=float)),
+        )
     else:
         kpi2 = 0.0
 
@@ -1763,9 +1955,14 @@ def main() -> None:
         if not date_filter_active and summary["time_progress_avg"]:
             st.metric("Ścieżka czasu (avg)", f"{summary['time_progress_avg']}%")
     with col2:
-        _colored_metric("KPI 1: Zakończone / Planowane (BOM)", f"{kpi1_val} &nbsp;<span style='font-size:0.5em;color:#888'>({kpi1_raw_completed}/{kpi1_raw_total})</span>", _kpi1_color(kpi1_val))
+        _colored_metric(
+            "KPI 1: Terminowość realizacji (BOM)",
+            f"{kpi1_val} &nbsp;<span style='font-size:0.5em;color:#888'>"
+            f"({len(kpi1_scores)}/{len(due_past)} ocenionych)</span>",
+            _kpi1_color(kpi1_val),
+        )
     with col3:
-        _colored_metric("KPI 2: Alloc / Plan avg (compl. BOM)", str(kpi2), _kpi2_color(kpi2))
+        _colored_metric("KPI 2: Used / Plan (compl. BOM)", str(kpi2), _kpi2_color(kpi2))
 
     st.caption(
         f"Debug planned effort: customFields zaczytane dla {summary['customfields_seen']} core items; "
@@ -1832,6 +2029,35 @@ def main() -> None:
             }
         )
         st.write("\n".join(st.session_state["logs"]))
+
+    st.subheader("Legenda ikon — Core Items")
+    st.markdown(
+        "- ✅ **Completed:** zadanie jest ukończone. **Due today/past:** ukończone "
+        "w terminie lub przed terminem.\n"
+        "- 🔴 **Completed:** zadanie nie jest ukończone. **Due today/past:** termin "
+        "jeszcze nie minął lub brakuje daty terminu.\n"
+        "- ⚠️ **Due today/past:** termin minął, a zadanie jest nadal otwarte, albo "
+        "zostało ukończone po terminie."
+    )
+
+    st.subheader("Jak liczone są KPI i wskaźniki")
+    st.markdown(
+        "- **KPI 1 — terminowość BOM:** średnia ocen ukończonych pozycji BOM, których "
+        "termin już minął. Ocena wynosi 1 do końca planowanego czasu (od startu do terminu), "
+        "potem liniowo spada zgodnie z tolerancją X ustawioną w panelu i osiąga 0 po jej "
+        "przekroczeniu. Otwarte pozycje oraz pozycje bez wymaganych dat są pomijane.\n"
+        "- **KPI 2 — Used / Plan:** suma „Used until yesterday” podzielona przez sumę planu "
+        "dla ukończonych pozycji BOM. To ważony wskaźnik: większy plan ma proporcjonalnie "
+        "większy wpływ. „Used” pochodzi z dziennych przydziałów Wrike do wczoraj, nie z "
+        "potwierdzonych wpisów czasu pracy.\n"
+        "- **Alloc / Planned:** suma przydzielonych godzin (Allocated) podzielona przez sumę "
+        "znanych godzin planu dla Core Items i BOM. Obejmuje pozycje niezależnie od statusu; "
+        "przy aktywnym filtrze dat uwzględnia wybrany zakres terminów.\n"
+        "- **Ścieżka czasu (avg):** średnia liczona jako upływ czasu od startu do ukończenia "
+        "(albo do dziś, jeśli brak daty ukończenia) podzielony przez kalendarzowy czas od "
+        "startu do terminu. Może przekroczyć 100%, jeśli minął termin; pokazuje się tylko "
+        "bez aktywnego filtra zakresu dat."
+    )
 
 if __name__ == "__main__":
     main()

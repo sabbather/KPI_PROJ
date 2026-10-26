@@ -2,3 +2,4 @@ __pycache__/
 .env
 trashbin/
 .cache/
+.cache/solidworks_cache.json
