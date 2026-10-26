@@ -188,6 +188,13 @@ def load_constructor_assignments() -> List[Dict[str, Any]]:
                 cleaned_days[day_value.isoformat()] = round(hours_value, 2)
         if not cleaned_days:
             continue
+        requested_hours = item.get("requested_hours")
+        try:
+            requested_hours = (
+                float(requested_hours) if requested_hours is not None else None
+            )
+        except (TypeError, ValueError):
+            requested_hours = None
         cleaned.append(
             {
                 "id": str(item.get("id") or uuid.uuid4().hex),
@@ -200,6 +207,7 @@ def load_constructor_assignments() -> List[Dict[str, Any]]:
                 "end_date": str(item.get("end_date") or max(cleaned_days)),
                 "mode": str(item.get("mode") or "custom"),
                 "hours_per_day": item.get("hours_per_day"),
+                "requested_hours": requested_hours,
                 "days": cleaned_days,
                 "created_at": item.get("created_at"),
             }
@@ -766,11 +774,16 @@ def project_date_ranges(core_df: pd.DataFrame) -> Dict[str, Tuple[date, date]]:
 
 
 def _assignment_day_hours(
-    assignments: List[Dict[str, Any]], constructor: str, day: date
+    assignments: List[Dict[str, Any]],
+    constructor: str,
+    day: date,
+    exclude_id: Optional[str] = None,
 ) -> float:
     day_key = day.isoformat()
     total = 0.0
     for assignment in assignments or []:
+        if exclude_id and assignment.get("id") == exclude_id:
+            continue
         if str(assignment.get("constructor") or "").upper() != constructor:
             continue
         days = assignment.get("days") or {}
@@ -779,6 +792,195 @@ def _assignment_day_hours(
         except (TypeError, ValueError):
             continue
     return total
+
+
+def _assignment_total_hours(assignment: Dict[str, Any]) -> float:
+    days = assignment.get("days") or {}
+    return round(sum(float(value) for value in days.values()), 2)
+
+
+def _assignment_mode_label(mode: Any) -> str:
+    return {
+        "full": "Pełne",
+        "half": "Połowa",
+        "custom": "Własne",
+        "budget": "Na godziny",
+        "manual": "Ręczne",
+    }.get(str(mode), str(mode))
+
+
+def _without_assignment(
+    assignments: List[Dict[str, Any]], assignment_id: Optional[str]
+) -> List[Dict[str, Any]]:
+    return [
+        assignment
+        for assignment in assignments
+        if not assignment_id or assignment.get("id") != assignment_id
+    ]
+
+
+def find_assignment(
+    assignments: List[Dict[str, Any]], assignment_id: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    if not assignment_id:
+        return None
+    for assignment in assignments:
+        if assignment.get("id") == assignment_id:
+            return assignment
+    return None
+
+
+def allocate_hours_forward(
+    assignments: List[Dict[str, Any]],
+    constructor: str,
+    project_id: str,
+    project_name: str,
+    start: date,
+    project_end: date,
+    requested_hours: float,
+    effective_daily_hours: float,
+) -> Tuple[Optional[Dict[str, Any]], float]:
+    """Allocate a total hour budget forward through project business days."""
+    requested = max(0.0, float(requested_hours))
+    if requested <= 0 or project_end < start:
+        return None, requested
+
+    remaining = requested
+    days: Dict[str, float] = {}
+    for day in business_days_between(start, project_end):
+        available = max(
+            0.0,
+            float(effective_daily_hours)
+            - _assignment_day_hours(assignments, constructor, day),
+        )
+        if available <= 0.001:
+            continue
+        hours = min(remaining, available)
+        if hours <= 0.001:
+            continue
+        days[day.isoformat()] = round(hours, 2)
+        remaining = round(remaining - hours, 2)
+        if remaining <= 0.001:
+            remaining = 0.0
+            break
+
+    if not days:
+        return None, remaining
+
+    return (
+        {
+            "id": uuid.uuid4().hex,
+            "kind": "project",
+            "project_id": project_id,
+            "project": project_name,
+            "label": project_name,
+            "constructor": constructor,
+            "start_date": min(days),
+            "end_date": max(days),
+            "mode": "budget",
+            "hours_per_day": None,
+            "requested_hours": round(requested, 2),
+            "days": days,
+            "created_at": datetime.utcnow().isoformat(timespec="seconds"),
+        },
+        remaining,
+    )
+
+
+def rebuild_assignment_block(
+    existing: Dict[str, Any],
+    assignments: List[Dict[str, Any]],
+    constructor: str,
+    start: date,
+    end: date,
+    mode: str,
+    target_hours: float,
+    requested_hours: float,
+    effective_daily_hours: float,
+    label: Optional[str] = None,
+) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]], float]:
+    """Rebuild an existing assignment, ignoring its old hours in availability."""
+    base = _without_assignment(assignments, existing.get("id"))
+    kind = "external" if existing.get("kind") == "external" else "project"
+    remaining = 0.0
+
+    if kind == "project" and mode == "budget":
+        block, remaining = allocate_hours_forward(
+            assignments=base,
+            constructor=constructor,
+            project_id=str(existing.get("project_id") or ""),
+            project_name=str(existing.get("project") or existing.get("label") or ""),
+            start=start,
+            project_end=end,
+            requested_hours=requested_hours,
+            effective_daily_hours=effective_daily_hours,
+        )
+    else:
+        block = _build_assignment_block(
+            kind=kind,
+            project_id=existing.get("project_id"),
+            project=str(existing.get("project") or ""),
+            label=str(
+                label
+                if label is not None
+                else existing.get("label") or existing.get("project") or ""
+            ),
+            constructor=constructor,
+            start=start,
+            end=end,
+            mode=mode,
+            target_hours=target_hours,
+            effective_daily_hours=effective_daily_hours,
+            assignments=base,
+        )
+
+    if block is None:
+        return None, base, remaining
+
+    block["id"] = existing.get("id") or block["id"]
+    block["created_at"] = existing.get("created_at") or block["created_at"]
+    return block, base + [block], remaining
+
+
+def update_assignment_days(
+    existing: Dict[str, Any],
+    new_hours: Dict[str, float],
+    constructor: str,
+) -> Optional[Dict[str, Any]]:
+    cleaned: Dict[str, float] = {}
+    for day_str, hours in new_hours.items():
+        try:
+            day_value = date.fromisoformat(str(day_str))
+            hours_value = float(hours)
+        except (TypeError, ValueError):
+            continue
+        if hours_value > 0.001:
+            cleaned[day_value.isoformat()] = round(hours_value, 2)
+
+    if not cleaned:
+        return None
+
+    updated = dict(existing)
+    updated["days"] = cleaned
+    updated["constructor"] = constructor
+    updated["start_date"] = min(cleaned)
+    updated["end_date"] = max(cleaned)
+    total = round(sum(cleaned.values()), 2)
+    if updated.get("mode") == "budget":
+        updated["requested_hours"] = total
+    else:
+        updated["mode"] = "manual"
+        updated["hours_per_day"] = None
+    return updated
+
+
+def replace_assignment(
+    assignments: List[Dict[str, Any]], updated: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    return [
+        updated if assignment.get("id") == updated.get("id") else assignment
+        for assignment in assignments
+    ]
 
 
 def _build_assignment_block(
@@ -1874,6 +2076,488 @@ def check_password() -> None:
 
 
 # ---- UI --------------------------------------------------------------------
+def _set_assignment_flash(message: str, level: str = "success") -> None:
+    st.session_state["assignment_flash"] = message
+    st.session_state["assignment_flash_level"] = level
+
+
+def render_budget_assignment_form(
+    assignments: List[Dict[str, Any]],
+    constructors: List[str],
+    effective_daily_hours: float,
+    project_map: Dict[str, str],
+    selected_projects: List[str],
+    project_ranges: Dict[str, Tuple[date, date]],
+    selection: Set[str],
+) -> None:
+    with st.expander("Przypisz na liczbę godzin", expanded=True):
+        st.caption(
+            "Wybierz projekt, datę startu i łączną liczbę godzin. System będzie "
+            "rozkładał dostępne godziny konstruktora na kolejne dni robocze do końca "
+            "projektu, aż wykorzysta zadaną pulę."
+        )
+        project_options = [
+            project_id
+            for project_id in selected_projects
+            if project_id in project_ranges
+        ]
+        if not project_options:
+            st.info(
+                "Brak projektów z kompletnymi datami start/koniec — nie można "
+                "rozłożyć godzin."
+            )
+            return
+
+        selected_dates_by_project: Dict[str, List[date]] = defaultdict(list)
+        for key in selection:
+            try:
+                project_id, day_str = str(key).split("::", 1)
+                selected_dates_by_project[project_id].append(
+                    date.fromisoformat(day_str)
+                )
+            except (ValueError, TypeError):
+                continue
+
+        if st.session_state.get("budget_project") not in project_options:
+            st.session_state["budget_project"] = project_options[0]
+        budget_project = st.selectbox(
+            "Projekt",
+            options=project_options,
+            format_func=lambda project_id: project_map.get(project_id, project_id),
+            key="budget_project",
+        )
+        project_start, project_end = project_ranges[budget_project]
+        selected_dates = selected_dates_by_project.get(budget_project, [])
+        default_start = min(selected_dates) if selected_dates else project_start
+        start_sig = (
+            f"{budget_project}:{default_start.isoformat()}:{project_end.isoformat()}"
+        )
+        if st.session_state.get("budget_start_sig") != start_sig:
+            st.session_state["budget_start_sig"] = start_sig
+            st.session_state["budget_start_date"] = default_start
+
+        budget_start = st.date_input(
+            "Data startu",
+            min_value=project_start,
+            max_value=project_end,
+            key="budget_start_date",
+        )
+        if not isinstance(budget_start, date):
+            budget_start = default_start
+        if budget_start < project_start:
+            budget_start = project_start
+        if budget_start > project_end:
+            budget_start = project_end
+
+        if st.session_state.get("budget_constructor") not in constructors:
+            st.session_state["budget_constructor"] = constructors[0]
+        budget_constructor = st.selectbox(
+            "Konstruktor",
+            options=constructors,
+            key="budget_constructor",
+        )
+        budget_hours = st.number_input(
+            "Łączna liczba godzin",
+            min_value=0.5,
+            max_value=10000.0,
+            value=8.0,
+            step=0.5,
+            format="%.1f",
+            key="budget_hours",
+        )
+
+        available_preview = sum(
+            max(
+                0.0,
+                float(effective_daily_hours)
+                - _assignment_day_hours(
+                    assignments, budget_constructor, business_day
+                ),
+            )
+            for business_day in business_days_between(budget_start, project_end)
+        )
+        st.caption(
+            f"Dostępne godziny od {budget_start.strftime('%d.%m.%Y')} do "
+            f"{project_end.strftime('%d.%m.%Y')}: **{available_preview:.1f} h**."
+        )
+
+        if st.button(
+            "Rozłóż godziny",
+            key="budget_allocate",
+            type="primary",
+        ):
+            if budget_hours <= 0:
+                st.error("Liczba godzin musi być większa od zera.")
+            elif budget_start > project_end:
+                st.error("Data startu jest po końcu projektu.")
+            else:
+                block, remaining = allocate_hours_forward(
+                    assignments=assignments,
+                    constructor=budget_constructor,
+                    project_id=budget_project,
+                    project_name=project_map.get(budget_project, budget_project),
+                    start=budget_start,
+                    project_end=project_end,
+                    requested_hours=budget_hours,
+                    effective_daily_hours=effective_daily_hours,
+                )
+                if block is None:
+                    st.warning(
+                        "Brak dostępnych godzin w tym zakresie — konstruktor jest "
+                        "już w pełni obciążony."
+                    )
+                else:
+                    st.session_state["constructor_assignments"] = (
+                        list(assignments) + [block]
+                    )
+                    st.session_state["assignments_dirty"] = True
+                    allocated = _assignment_total_hours(block)
+                    message = (
+                        f"Przypisano {allocated:.1f} h konstruktorowi "
+                        f"{budget_constructor} od {block['start_date']} "
+                        f"do {block['end_date']}."
+                    )
+                    if remaining > 0.001:
+                        message += (
+                            f" Nie udało się przypisać {remaining:.1f} h do końca "
+                            "projektu."
+                        )
+                        _set_assignment_flash(message, "warning")
+                    else:
+                        _set_assignment_flash(message)
+                    st.rerun()
+
+
+def render_assignment_editor(
+    assignments: List[Dict[str, Any]],
+    constructors: List[str],
+    effective_daily_hours: float,
+    project_ranges: Dict[str, Tuple[date, date]],
+) -> None:
+    assignment_id = st.session_state.get("editing_assignment_id")
+    if not assignment_id:
+        return
+
+    existing = find_assignment(assignments, str(assignment_id))
+    if existing is None:
+        st.session_state.pop("editing_assignment_id", None)
+        st.info("Wybrane przypisanie zostało usunięte.")
+        return
+
+    nonce = int(st.session_state.get("assignment_edit_nonce", 0))
+    st.markdown("### Edycja przypisania")
+    header_col, cancel_col = st.columns([5, 1])
+    assignment_name = existing.get("label") or existing.get("project") or ""
+    kind_label = (
+        "Inne zadanie" if existing.get("kind") == "external" else "Projekt"
+    )
+    header_col.caption(
+        f"{kind_label}: **{assignment_name}**  |  "
+        f"tryb: **{_assignment_mode_label(existing.get('mode'))}**  |  "
+        f"aktualnie: **{_assignment_total_hours(existing):.1f} h**"
+    )
+    if cancel_col.button("Anuluj edycję", key=f"cancel_edit_{nonce}"):
+        st.session_state.pop("editing_assignment_id", None)
+        st.session_state["assignment_edit_nonce"] = nonce + 1
+        st.rerun()
+
+    is_external = existing.get("kind") == "external"
+    project_id = str(existing.get("project_id") or "")
+    project_range = project_ranges.get(project_id) if project_id else None
+    try:
+        current_start = date.fromisoformat(str(existing.get("start_date")))
+    except (TypeError, ValueError):
+        current_start = date.today()
+    try:
+        current_end = date.fromisoformat(str(existing.get("end_date")))
+    except (TypeError, ValueError):
+        current_end = current_start
+    if current_end < current_start:
+        current_end = current_start
+
+    constructor_options = list(constructors)
+    existing_constructor = str(existing.get("constructor") or "").upper()
+    if existing_constructor and existing_constructor not in constructor_options:
+        constructor_options.append(existing_constructor)
+    constructor_key = f"edit_constructor_{nonce}"
+    if st.session_state.get(constructor_key) not in constructor_options:
+        st.session_state[constructor_key] = (
+            existing_constructor or constructor_options[0]
+        )
+    edit_constructor = st.selectbox(
+        "Konstruktor",
+        options=constructor_options,
+        key=constructor_key,
+    )
+
+    block_tab, days_tab = st.tabs(["Blok", "Dni"])
+
+    with block_tab:
+        st.caption(
+            "Edycja bloku przelicza przypisanie od nowa. Ręczne zmiany w zakładce "
+            "„Dni” zostaną nadpisane."
+        )
+        if is_external:
+            edit_label = st.text_input(
+                "Nazwa zadania",
+                value=str(existing.get("label") or ""),
+                key=f"edit_label_{nonce}",
+            )
+        else:
+            edit_label = str(
+                existing.get("label") or existing.get("project") or ""
+            )
+
+        min_bound = None
+        max_bound = None
+        if project_range:
+            min_bound = min(project_range[0], current_start, current_end)
+            max_bound = max(project_range[1], current_start, current_end)
+
+        edit_start = st.date_input(
+            "Data startu",
+            value=current_start,
+            min_value=min_bound,
+            max_value=max_bound,
+            key=f"edit_start_{nonce}",
+        )
+        if not isinstance(edit_start, date):
+            edit_start = current_start
+
+        is_budget = existing.get("mode") == "budget" and not is_external
+        edit_end = current_end
+        edit_requested_hours = 0.0
+        edit_target_hours = effective_daily_hours
+        edit_mode = "custom"
+        if is_budget:
+            if project_range:
+                edit_end = project_range[1]
+                st.caption(
+                    f"Koniec projektu: **{edit_end.strftime('%d.%m.%Y')}**. "
+                    "Godziny zostaną rozłożone do tej daty."
+                )
+            else:
+                st.warning(
+                    "Brak zakresu dat projektu — nie można przeliczyć przypisania "
+                    "na liczbę godzin."
+                )
+            edit_requested_hours = st.number_input(
+                "Łączna liczba godzin",
+                min_value=0.5,
+                max_value=10000.0,
+                value=float(
+                    existing.get("requested_hours")
+                    or _assignment_total_hours(existing)
+                    or 0.5
+                ),
+                step=0.5,
+                format="%.1f",
+                key=f"edit_requested_{nonce}",
+            )
+        else:
+            edit_end = st.date_input(
+                "Data końca",
+                value=current_end,
+                min_value=min_bound,
+                max_value=max_bound,
+                key=f"edit_end_{nonce}",
+            )
+            if not isinstance(edit_end, date):
+                edit_end = current_end
+            mode_options = ["Pełne", "Połowa", "Własne"]
+            existing_mode = str(existing.get("mode") or "custom")
+            mode_index = 0 if existing_mode == "full" else 1 if existing_mode == "half" else 2
+            edit_mode_label = st.radio(
+                "Tryb godzin",
+                mode_options,
+                index=mode_index,
+                horizontal=True,
+                key=f"edit_mode_{nonce}",
+            )
+            if edit_mode_label == "Pełne":
+                edit_mode = "full"
+                edit_target_hours = effective_daily_hours
+            elif edit_mode_label == "Połowa":
+                edit_mode = "half"
+                edit_target_hours = effective_daily_hours / 2
+            else:
+                edit_mode = "custom"
+                existing_days = existing.get("days") or {}
+                default_target = float(existing.get("hours_per_day") or 0.0)
+                if default_target <= 0 and existing_days:
+                    default_target = max(
+                        float(value) for value in existing_days.values()
+                    )
+                if default_target <= 0:
+                    default_target = effective_daily_hours
+                edit_target_hours = st.number_input(
+                    "Godziny dziennie",
+                    min_value=0.1,
+                    max_value=24.0,
+                    value=default_target,
+                    step=0.5,
+                    format="%.1f",
+                    key=f"edit_target_{nonce}",
+                )
+
+        if st.button(
+            "Przelicz i zapisz",
+            key=f"edit_save_block_{nonce}",
+            type="primary",
+        ):
+            if is_external and not edit_label.strip():
+                st.error("Podaj nazwę zadania.")
+            elif edit_end < edit_start:
+                st.error("Data końca nie może być wcześniejsza od daty startu.")
+            elif is_budget and not project_range:
+                st.error("Brak zakresu dat projektu do przeliczenia godzin.")
+            else:
+                block, working, remaining = rebuild_assignment_block(
+                    existing=existing,
+                    assignments=assignments,
+                    constructor=edit_constructor,
+                    start=edit_start,
+                    end=edit_end,
+                    mode="budget" if is_budget else edit_mode,
+                    target_hours=edit_target_hours,
+                    requested_hours=edit_requested_hours,
+                    effective_daily_hours=effective_daily_hours,
+                    label=edit_label.strip() if is_external else edit_label,
+                )
+                if block is None:
+                    st.warning(
+                        "Nie udało się przeliczyć przypisania — brak dostępnych "
+                        "godzin w wybranym zakresie."
+                    )
+                else:
+                    st.session_state["constructor_assignments"] = working
+                    st.session_state["assignments_dirty"] = True
+                    allocated = _assignment_total_hours(block)
+                    message = (
+                        f"Zapisano edycję: {allocated:.1f} h konstruktorowi "
+                        f"{edit_constructor}."
+                    )
+                    if is_budget and remaining > 0.001:
+                        message += (
+                            f" Pozostało nieprzypisane: {remaining:.1f} h."
+                        )
+                        _set_assignment_flash(message, "warning")
+                    else:
+                        _set_assignment_flash(message)
+                    st.session_state.pop("editing_assignment_id", None)
+                    st.session_state["assignment_edit_nonce"] = nonce + 1
+                    st.rerun()
+
+    with days_tab:
+        st.caption(
+            "Możesz skorygować godziny w istniejących dniach. Limit to dostępne "
+            "godziny konstruktora po wykluczeniu tego przypisania."
+        )
+        edit_rows: List[Dict[str, Any]] = []
+        for day_str, hours in (existing.get("days") or {}).items():
+            try:
+                day_value = date.fromisoformat(str(day_str))
+                hours_value = float(hours)
+            except (TypeError, ValueError):
+                continue
+            available = max(
+                0.0,
+                float(effective_daily_hours)
+                - _assignment_day_hours(
+                    assignments,
+                    edit_constructor,
+                    day_value,
+                    exclude_id=existing.get("id"),
+                ),
+            )
+            edit_rows.append(
+                {
+                    "_day": day_value.isoformat(),
+                    "Dzień": day_value.strftime("%d.%m.%Y"),
+                    "Dzień tyg.": WEEKDAY_LABELS[day_value.weekday()],
+                    "Dostępne": round(available, 2),
+                    "Godziny": round(hours_value, 2),
+                }
+            )
+
+        if not edit_rows:
+            st.info("To przypisanie nie ma dni do edycji.")
+        else:
+            edit_df = (
+                pd.DataFrame(edit_rows)
+                .sort_values("_day")
+                .set_index("_day")
+            )
+            available_by_day = {
+                str(index): float(row["Dostępne"])
+                for index, row in edit_df.iterrows()
+            }
+            edited_days = st.data_editor(
+                edit_df[["Dzień", "Dzień tyg.", "Dostępne", "Godziny"]],
+                column_config={
+                    "Dostępne": st.column_config.NumberColumn(
+                        "Dostępne (bez tego bloku)", format="%.2f"
+                    ),
+                    "Godziny": st.column_config.NumberColumn(
+                        "Godziny", format="%.2f", min_value=0.0, max_value=24.0
+                    ),
+                },
+                disabled=["Dzień", "Dzień tyg.", "Dostępne"],
+                hide_index=True,
+                num_rows="fixed",
+                key=f"edit_days_{nonce}_{assignment_id}",
+                width="stretch",
+            )
+            if st.button(
+                "Zapisz dni",
+                key=f"edit_save_days_{nonce}",
+                type="primary",
+            ):
+                validation_errors: List[str] = []
+                new_hours: Dict[str, float] = {}
+                for day_str, row in edited_days.iterrows():
+                    try:
+                        hours_value = float(row["Godziny"])
+                    except (TypeError, ValueError):
+                        hours_value = 0.0
+                    if hours_value < 0:
+                        validation_errors.append(
+                            f"{day_str}: godziny nie mogą być ujemne."
+                        )
+                        continue
+                    available = available_by_day.get(str(day_str), 0.0)
+                    if hours_value > available + 0.001:
+                        validation_errors.append(
+                            f"{day_str}: maksymalnie {available:.2f} h."
+                        )
+                    new_hours[str(day_str)] = hours_value
+
+                if validation_errors:
+                    st.error("Popraw godziny: " + " ".join(validation_errors))
+                else:
+                    updated = update_assignment_days(
+                        existing=existing,
+                        new_hours=new_hours,
+                        constructor=edit_constructor,
+                    )
+                    if updated is None:
+                        st.error(
+                            "Przypisanie musi mieć co najmniej jedną godzinę."
+                        )
+                    else:
+                        st.session_state["constructor_assignments"] = (
+                            replace_assignment(assignments, updated)
+                        )
+                        st.session_state["assignments_dirty"] = True
+                        _set_assignment_flash(
+                            f"Zapisano ręczną edycję "
+                            f"{_assignment_total_hours(updated):.1f} h."
+                        )
+                        st.session_state.pop("editing_assignment_id", None)
+                        st.session_state["assignment_edit_nonce"] = nonce + 1
+                        st.rerun()
+
+
 def render_resource_planning_section(
     core_df: pd.DataFrame,
     daily_df: pd.DataFrame,
@@ -1885,8 +2569,12 @@ def render_resource_planning_section(
     st.subheader("Planowanie konstruktorów")
     st.caption("Tabela obejmuje dni robocze (pon.–pt.) w zakresie dat każdego projektu.")
     flash = st.session_state.pop("assignment_flash", None)
+    flash_level = st.session_state.pop("assignment_flash_level", "success")
     if flash:
-        st.success(flash)
+        if flash_level == "warning":
+            st.warning(flash)
+        else:
+            st.success(flash)
 
     if not constructors:
         st.info(
@@ -1900,26 +2588,42 @@ def render_resource_planning_section(
     if dirty:
         st.warning("Masz niezapisane zmiany. Kliknij „Zapisz”, aby utrwalić je na dysku.")
 
-    save_col, revert_col, hint_col = st.columns([1, 1, 3])
-    if save_col.button("Zapisz", type="primary", key="save_assignments"):
-        save_constructor_assignments(assignments)
-        st.session_state["assignments_dirty"] = False
-        st.session_state["assignment_flash"] = "Zapisano przypisania konstruktorów."
-        st.rerun()
-    if revert_col.button(
-        "Cofnij zmiany",
-        key="revert_assignments",
-        disabled=not dirty,
-    ):
-        st.session_state["constructor_assignments"] = load_constructor_assignments()
-        st.session_state["assignments_dirty"] = False
-        st.session_state["assignment_selection"] = set()
-        st.session_state["assign_editor_nonce"] = (
-            int(st.session_state.get("assign_editor_nonce", 0)) + 1
-        )
-        st.session_state["assignment_flash"] = "Przywrócono ostatni zapis."
-        st.rerun()
-    hint_col.caption("Zmiany są trwałe dopiero po kliknięciu „Zapisz”.")
+    def render_save_controls(suffix: str) -> None:
+        current_dirty = bool(st.session_state.get("assignments_dirty", False))
+        save_col, revert_col, hint_col = st.columns([1, 1, 3])
+        if save_col.button(
+            "Zapisz",
+            type="primary",
+            key=f"save_assignments_{suffix}",
+        ):
+            save_constructor_assignments(
+                st.session_state["constructor_assignments"]
+            )
+            st.session_state["assignments_dirty"] = False
+            _set_assignment_flash("Zapisano przypisania konstruktorów.")
+            st.rerun()
+        if revert_col.button(
+            "Cofnij zmiany",
+            key=f"revert_assignments_{suffix}",
+            disabled=not current_dirty,
+        ):
+            st.session_state["constructor_assignments"] = (
+                load_constructor_assignments()
+            )
+            st.session_state["assignments_dirty"] = False
+            st.session_state["assignment_selection"] = set()
+            st.session_state["assign_editor_nonce"] = (
+                int(st.session_state.get("assign_editor_nonce", 0)) + 1
+            )
+            st.session_state.pop("editing_assignment_id", None)
+            st.session_state["assignment_edit_nonce"] = (
+                int(st.session_state.get("assignment_edit_nonce", 0)) + 1
+            )
+            _set_assignment_flash("Przywrócono ostatni zapis.")
+            st.rerun()
+        hint_col.caption("Zmiany są trwałe dopiero po kliknięciu „Zapisz”.")
+
+    render_save_controls("top")
 
     if st.session_state.get("assign_constructor") not in constructors:
         st.session_state["assign_constructor"] = constructors[0]
@@ -1934,6 +2638,7 @@ def render_resource_planning_section(
     )
 
     project_ranges = project_date_ranges(core_df)
+    selection = set(st.session_state.get("assignment_selection", set()))
     table = build_project_day_table(
         core_df=core_df,
         selected_projects=selected_projects,
@@ -2102,12 +2807,22 @@ def render_resource_planning_section(
                     sum(float(value) for value in block["days"].values())
                     for block in created
                 )
-                st.session_state["assignment_flash"] = (
+                _set_assignment_flash(
                     f"Przypisano {assigned_hours:.1f} h konstruktorowi "
                     f"{selected_constructor} w {len(created)} "
                     f"{'bloku' if len(created) == 1 else 'blokach'}."
                 )
                 st.rerun()
+
+    render_budget_assignment_form(
+        assignments=st.session_state["constructor_assignments"],
+        constructors=constructors,
+        effective_daily_hours=effective_daily_hours,
+        project_map=project_map,
+        selected_projects=selected_projects,
+        project_ranges=project_ranges,
+        selection=set(st.session_state.get("assignment_selection", set())),
+    )
 
     with st.expander("Obciążenia inne niż projekty", expanded=False):
         st.caption(
@@ -2185,7 +2900,7 @@ def render_resource_planning_section(
                     st.session_state["constructor_assignments"] = working
                     st.session_state["assignments_dirty"] = True
                     assigned_hours = sum(float(value) for value in block["days"].values())
-                    st.session_state["assignment_flash"] = (
+                    _set_assignment_flash(
                         f"Dodano obciążenie „{ext_label.strip()}”: "
                         f"{assigned_hours:.1f} h."
                     )
@@ -2198,9 +2913,8 @@ def render_resource_planning_section(
         else:
             summary_rows = []
             for assignment in assignments:
-                total_hours = sum(
-                    float(value) for value in assignment.get("days", {}).values()
-                )
+                total_hours = _assignment_total_hours(assignment)
+                requested_hours = assignment.get("requested_hours")
                 summary_rows.append(
                     {
                         "Typ": "Inne zadanie"
@@ -2212,8 +2926,11 @@ def render_resource_planning_section(
                         "Konstruktor": assignment.get("constructor", ""),
                         "Od": assignment.get("start_date", ""),
                         "Do": assignment.get("end_date", ""),
-                        "Godziny": round(total_hours, 2),
-                        "Tryb": assignment.get("mode", ""),
+                        "Żądane h": round(float(requested_hours), 2)
+                        if requested_hours is not None
+                        else None,
+                        "Przypisane h": total_hours,
+                        "Tryb": _assignment_mode_label(assignment.get("mode")),
                     }
                 )
             st.dataframe(
@@ -2221,7 +2938,12 @@ def render_resource_planning_section(
                 hide_index=True,
                 width="stretch",
                 column_config={
-                    "Godziny": st.column_config.NumberColumn("Godziny", format="%.2f")
+                    "Żądane h": st.column_config.NumberColumn(
+                        "Żądane h", format="%.2f"
+                    ),
+                    "Przypisane h": st.column_config.NumberColumn(
+                        "Przypisane h", format="%.2f"
+                    ),
                 },
             )
             options = {
@@ -2229,27 +2951,57 @@ def render_resource_planning_section(
                     f"{assignment.get('constructor', '')} | "
                     f"{assignment.get('label') or assignment.get('project') or ''} | "
                     f"{assignment.get('start_date', '')}–{assignment.get('end_date', '')} | "
-                    f"{sum(float(v) for v in assignment.get('days', {}).values()):.1f} h"
+                    f"{_assignment_total_hours(assignment):.1f} h | "
+                    f"{_assignment_mode_label(assignment.get('mode'))}"
                 )
                 for assignment in assignments
             }
-            if st.session_state.get("delete_assignment_id") not in options:
-                st.session_state["delete_assignment_id"] = next(iter(options))
+            if st.session_state.get("manage_assignment_id") not in options:
+                st.session_state["manage_assignment_id"] = next(iter(options))
             selected_assignment = st.selectbox(
-                "Wybierz przypisanie do usunięcia",
+                "Wybierz przypisanie",
                 options=list(options.keys()),
                 format_func=lambda key: options[key],
-                key="delete_assignment_id",
+                key="manage_assignment_id",
             )
-            if st.button("Usuń wybrane przypisanie", key="delete_assignment"):
+            edit_col, delete_col = st.columns(2)
+            if edit_col.button(
+                "Edytuj wybrane przypisanie",
+                key="edit_assignment",
+            ):
+                st.session_state["editing_assignment_id"] = selected_assignment
+                st.session_state["assignment_edit_nonce"] = (
+                    int(st.session_state.get("assignment_edit_nonce", 0)) + 1
+                )
+                st.rerun()
+            if delete_col.button(
+                "Usuń wybrane przypisanie",
+                key="delete_assignment",
+            ):
                 st.session_state["constructor_assignments"] = [
                     assignment
                     for assignment in assignments
                     if assignment["id"] != selected_assignment
                 ]
+                if (
+                    st.session_state.get("editing_assignment_id")
+                    == selected_assignment
+                ):
+                    st.session_state.pop("editing_assignment_id", None)
                 st.session_state["assignments_dirty"] = True
-                st.session_state["assignment_flash"] = "Usunięto przypisanie."
+                _set_assignment_flash("Usunięto przypisanie.")
                 st.rerun()
+
+    assignments = st.session_state["constructor_assignments"]
+    render_assignment_editor(
+        assignments=assignments,
+        constructors=constructors,
+        effective_daily_hours=effective_daily_hours,
+        project_ranges=project_ranges,
+    )
+
+    st.divider()
+    render_save_controls("bottom")
 
 
 # ---- UI --------------------------------------------------------------------
