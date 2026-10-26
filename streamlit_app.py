@@ -3016,7 +3016,7 @@ def render_resource_usage(
         "Obciążenie konstruktorów w projektach oraz w zadaniach spoza listy projektów. "
         "Wykresy pokazują dzienne użycie godzin, a etykiety nad słupkami — projekty/zadania "
         "obciążające dany dzień. Oś czasu obejmuje pełny wybrany zakres dat, również dni "
-        "bez obciążenia."
+        "bez obciążenia. Wszyscy dostępni konstruktorzy są pokazani w zakładkach."
     )
     if st.session_state.get("assignments_dirty"):
         st.warning(
@@ -3109,36 +3109,15 @@ def render_resource_usage(
             if str(value).strip()
         }
     )
-    available_constructors = [
-        constructor for constructor in constructors if constructor in present_constructors
-    ] + [
-        constructor
-        for constructor in present_constructors
-        if constructor not in constructors
-    ]
+    available_constructors = list(constructors)
+    for constructor in present_constructors:
+        if constructor not in available_constructors:
+            available_constructors.append(constructor)
     if not available_constructors:
         st.info("Brak konstruktorów w przypisaniach.")
         return
-    if "resource_usage_constructors" not in st.session_state:
-        st.session_state["resource_usage_constructors"] = available_constructors
-    else:
-        st.session_state["resource_usage_constructors"] = [
-            item
-            for item in st.session_state["resource_usage_constructors"]
-            if item in available_constructors
-        ]
-        if not st.session_state["resource_usage_constructors"]:
-            st.session_state["resource_usage_constructors"] = available_constructors
-    selected_constructors = st.multiselect(
-        "Konstruktorzy",
-        options=available_constructors,
-        key="resource_usage_constructors",
-    )
-    if not selected_constructors:
-        st.info("Zaznacz co najmniej jednego konstruktora.")
-        return
 
-    expanded = expanded[expanded["constructor"].isin(selected_constructors)].copy()
+    expanded = expanded.copy()
     expanded["category"] = [
         f"Inne: {row['label']}" if row["kind"] == "external" else row["project"]
         for _, row in expanded.iterrows()
@@ -3156,60 +3135,64 @@ def render_resource_usage(
         )
     )
 
-    tabs = st.tabs(selected_constructors)
-    for tab, constructor in zip(tabs, selected_constructors):
+    workdays = int(pd.bdate_range(start_filter, end_filter).size)
+    capacity = float(effective_daily_hours) * workdays
+
+    tabs = st.tabs(available_constructors)
+    for tab, constructor in zip(tabs, available_constructors):
         with tab:
             con_df = expanded[expanded["constructor"] == constructor]
             con_labels = label_df[label_df["constructor"] == constructor]
-            if con_df.empty:
-                st.info("Brak danych dla tego konstruktora.")
-                continue
-
-            bars = (
-                alt.Chart(con_df)
-                .mark_bar()
-                .encode(
-                    x=alt.X(
-                        "date:T",
-                        title="Dzień",
-                        scale=x_scale,
-                        axis=alt.Axis(format="%d.%m", labelAngle=-45),
-                    ),
-                    y=alt.Y("hours:Q", title="Godziny", stack="zero"),
-                    color=alt.Color("category_short:N", title="Projekt / zadanie"),
-                    tooltip=[
-                        alt.Tooltip("date:T", title="Dzień", format="%d.%m.%Y"),
-                        alt.Tooltip("category:N", title="Projekt / zadanie"),
-                        alt.Tooltip("hours:Q", title="Godziny", format=".2f"),
-                    ],
-                )
-            )
-            labels = (
-                alt.Chart(con_labels)
-                .mark_text(angle=270, dx=-4, dy=0, fontSize=8, color="#444")
-                .encode(
-                    x=alt.X(
-                        "date:T",
-                        title="Dzień",
-                        scale=x_scale,
-                        axis=alt.Axis(format="%d.%m", labelAngle=-45),
-                    ),
-                    y=alt.Y("total_hours:Q", title=None),
-                    text=alt.Text("projects:N"),
-                )
-            )
-            st.altair_chart(
-                (bars + labels).properties(height=360, width="container"),
-                use_container_width=True,
-            )
-
-            total_h = float(con_df["hours"].sum())
-            workdays = int(pd.bdate_range(start_filter, end_filter).size)
-            capacity = float(effective_daily_hours) * workdays
+            total_h = float(con_df["hours"].sum()) if not con_df.empty else 0.0
             utilization = (total_h / capacity * 100) if capacity > 0 else 0.0
+
+            if con_df.empty:
+                st.info("Brak obciążenia w wybranym zakresie dat.")
+            else:
+                bars = (
+                    alt.Chart(con_df)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X(
+                            "date:T",
+                            title="Dzień",
+                            scale=x_scale,
+                            axis=alt.Axis(format="%d.%m", labelAngle=-45),
+                        ),
+                        y=alt.Y("hours:Q", title="Godziny", stack="zero"),
+                        color=alt.Color("category_short:N", title="Projekt / zadanie"),
+                        tooltip=[
+                            alt.Tooltip("date:T", title="Dzień", format="%d.%m.%Y"),
+                            alt.Tooltip("category:N", title="Projekt / zadanie"),
+                            alt.Tooltip("hours:Q", title="Godziny", format=".2f"),
+                        ],
+                    )
+                )
+                labels = (
+                    alt.Chart(con_labels)
+                    .mark_text(angle=270, dx=-4, dy=0, fontSize=8, color="#444")
+                    .encode(
+                        x=alt.X(
+                            "date:T",
+                            title="Dzień",
+                            scale=x_scale,
+                            axis=alt.Axis(format="%d.%m", labelAngle=-45),
+                        ),
+                        y=alt.Y("total_hours:Q", title=None),
+                        text=alt.Text("projects:N"),
+                    )
+                )
+                st.altair_chart(
+                    (bars + labels).properties(height=360, width="container"),
+                    use_container_width=True,
+                )
+
             c1, c2, c3 = st.columns(3)
             c1.metric("Suma godzin", f"{total_h:.1f} h")
-            c2.metric("Dni z obciążeniem", con_df["date"].nunique())
+            c2.metric(
+                "Dni z obciążeniem",
+                int(con_df["date"].nunique()) if not con_df.empty else 0,
+            )
             c3.metric(
                 "Wykorzystanie",
                 f"{utilization:.0f}%",
@@ -3219,25 +3202,28 @@ def render_resource_usage(
                 ),
             )
 
-            detail = (
-                con_df.groupby(["date", "category"], as_index=False)["hours"]
-                .sum()
-                .sort_values(["date", "category"])
-            )
-            detail["Dzień"] = detail["date"].apply(
-                lambda value: value.strftime("%d.%m.%Y")
-            )
-            detail = detail.rename(
-                columns={"category": "Projekt / zadanie", "hours": "Godziny"}
-            )[["Dzień", "Projekt / zadanie", "Godziny"]]
-            st.dataframe(
-                detail,
-                hide_index=True,
-                width="stretch",
-                column_config={
-                    "Godziny": st.column_config.NumberColumn("Godziny", format="%.2f")
-                },
-            )
+            if not con_df.empty:
+                detail = (
+                    con_df.groupby(["date", "category"], as_index=False)["hours"]
+                    .sum()
+                    .sort_values(["date", "category"])
+                )
+                detail["Dzień"] = detail["date"].apply(
+                    lambda value: value.strftime("%d.%m.%Y")
+                )
+                detail = detail.rename(
+                    columns={"category": "Projekt / zadanie", "hours": "Godziny"}
+                )[["Dzień", "Projekt / zadanie", "Godziny"]]
+                st.dataframe(
+                    detail,
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Godziny": st.column_config.NumberColumn(
+                            "Godziny", format="%.2f"
+                        )
+                    },
+                )
 
 
 def main() -> None:
