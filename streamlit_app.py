@@ -2686,7 +2686,12 @@ def render_resource_planning_section(
                 "weekday": st.column_config.TextColumn("Dzień tyg."),
                 "plan_hours": st.column_config.NumberColumn("Plan (h)", format="%.2f"),
                 "available_h": st.column_config.NumberColumn(
-                    f"Dostępne h – {selected_constructor}", format="%.2f"
+                    f"Dostępne h – {selected_constructor}",
+                    format="%.2f",
+                    help=(
+                        "Dostępność globalna konstruktora w danym dniu, po odjęciu "
+                        "wszystkich przypisań, w tym innych zadań spoza projektów."
+                    ),
                 ),
                 "assigned_project_h": st.column_config.NumberColumn(
                     "Przypisane do projektu (h)", format="%.2f"
@@ -3014,9 +3019,11 @@ def render_resource_usage(
     st.subheader("ZUŻYCIE ZASOBÓW")
     st.caption(
         "Obciążenie konstruktorów w projektach oraz w zadaniach spoza listy projektów. "
-        "Wykresy pokazują dzienne użycie godzin, a etykiety nad słupkami — projekty/zadania "
-        "obciążające dany dzień. Oś czasu obejmuje pełny wybrany zakres dat, również dni "
-        "bez obciążenia. Wszyscy dostępni konstruktorzy są pokazani w zakładkach."
+        "Przy wybranych projektach widok pokazuje tylko przypisania do tych projektów; "
+        "inne zadania są widoczne po wyczyszczeniu wyboru. Wykresy pokazują dzienne użycie "
+        "godzin, a etykiety nad słupkami — projekty/zadania obciążające dany dzień. "
+        "Oś czasu obejmuje pełny wybrany zakres dat, również dni bez obciążenia. "
+        "Wszyscy dostępni konstruktorzy są pokazani w zakładkach."
     )
     if st.session_state.get("assignments_dirty"):
         st.warning(
@@ -3032,24 +3039,40 @@ def render_resource_usage(
         return
 
     if selected_projects:
+        # External tasks are global, so they should not masquerade as loads of
+        # a selected project.  Show them only when no project filter is active.
         expanded = expanded[
-            (expanded["kind"] == "external")
-            | (expanded["project_id"].isin(selected_projects))
+            (expanded["kind"] == "project")
+            & (expanded["project_id"].isin(selected_projects))
         ]
         if expanded.empty:
-            st.info("Brak przypisań dla wybranych projektów.")
+            st.info("Brak przypisań do wybranych projektów.")
+            if any(item.get("kind") == "external" for item in assignments):
+                st.caption(
+                    "Inne zadania są ukryte przy filtrze projektów — "
+                    "wyczyść wybór, aby je zobaczyć."
+                )
             return
+        if any(item.get("kind") == "external" for item in assignments):
+            st.caption(
+                "Wybrano projekty — pokazuję tylko przypisania do tych projektów. "
+                "Inne zadania zobaczysz po wyczyszczeniu wyboru projektów."
+            )
+        else:
+            st.caption("Wybrano projekty — pokazuję tylko przypisania do tych projektów.")
     else:
-        st.caption("Nie wybrano projektów — pokazuję wszystkie zapisane przypisania.")
+        st.caption(
+            "Nie wybrano projektów — pokazuję wszystkie zapisane przypisania, "
+            "w tym inne zadania."
+        )
 
     # The usage view should span whole assignment ranges, not only days that
     # actually have hours.  Include block start/end dates in the default range.
     range_dates: List[date] = []
     for assignment in assignments:
-        if (
-            selected_projects
-            and assignment.get("kind") != "external"
-            and assignment.get("project_id") not in selected_projects
+        if selected_projects and (
+            assignment.get("kind") == "external"
+            or assignment.get("project_id") not in selected_projects
         ):
             continue
         for key in ("start_date", "end_date"):
@@ -3507,6 +3530,13 @@ def main() -> None:
                     if not relevant_assignments.empty
                     else 0.0
                 )
+                project_assignment_rows = (
+                    relevant_assignments[
+                        relevant_assignments["kind"] == "project"
+                    ]
+                    if not relevant_assignments.empty
+                    else relevant_assignments
+                )
 
                 capacity_per_person = effective_daily_h * workdays_in_range
                 if capacity_per_person > 0:
@@ -3561,10 +3591,11 @@ def main() -> None:
                     color=alt.Color("project:N", title="Project"),
                 )
                 chart = bars
-                if not relevant_assignments.empty:
+                if not project_assignment_rows.empty:
                     line_df = (
-                        relevant_assignments.groupby("date", as_index=False)["hours"]
-                        .sum()
+                        project_assignment_rows.groupby("date", as_index=False)[
+                            "hours"
+                        ].sum()
                     )
                     line = alt.Chart(line_df).mark_line(
                         point=True, color="#d32f2f", strokeWidth=2
@@ -3582,10 +3613,22 @@ def main() -> None:
                 chart_col.altair_chart(
                     chart.properties(width="container"), use_container_width=True
                 )
-                if not relevant_assignments.empty:
+                if not project_assignment_rows.empty:
                     st.caption(
-                        "Czerwona linia = suma godzin przypisanych konstruktorom "
-                        "(projekty + inne zadania) na dany dzień."
+                        "Czerwona linia = suma godzin przypisanych do wybranych "
+                        "projektów na dany dzień."
+                    )
+                    if assigned_external_h > 0:
+                        st.caption(
+                            f"Inne zadania poza projektami: "
+                            f"{assigned_external_h:.1f} h "
+                            "(nie są rysowane na wykresie)."
+                        )
+                elif assigned_external_h > 0:
+                    st.caption(
+                        "Brak przypisań do wybranych projektów. "
+                        f"Inne zadania poza projektami: "
+                        f"{assigned_external_h:.1f} h."
                     )
                 with average_col:
                     st.metric(
