@@ -3015,7 +3015,8 @@ def render_resource_usage(
     st.caption(
         "Obciążenie konstruktorów w projektach oraz w zadaniach spoza listy projektów. "
         "Wykresy pokazują dzienne użycie godzin, a etykiety nad słupkami — projekty/zadania "
-        "obciążające dany dzień."
+        "obciążające dany dzień. Oś czasu obejmuje pełny wybrany zakres dat, również dni "
+        "bez obciążenia."
     )
     if st.session_state.get("assignments_dirty"):
         st.warning(
@@ -3041,8 +3042,34 @@ def render_resource_usage(
     else:
         st.caption("Nie wybrano projektów — pokazuję wszystkie zapisane przypisania.")
 
-    min_date = expanded["date"].min()
-    max_date = expanded["date"].max()
+    # The usage view should span whole assignment ranges, not only days that
+    # actually have hours.  Include block start/end dates in the default range.
+    range_dates: List[date] = []
+    for assignment in assignments:
+        if (
+            selected_projects
+            and assignment.get("kind") != "external"
+            and assignment.get("project_id") not in selected_projects
+        ):
+            continue
+        for key in ("start_date", "end_date"):
+            try:
+                range_dates.append(date.fromisoformat(str(assignment.get(key))))
+            except (TypeError, ValueError):
+                continue
+
+    expanded_min = _to_date_only(expanded["date"].min())
+    expanded_max = _to_date_only(expanded["date"].max())
+    candidate_dates = [
+        value
+        for value in [expanded_min, expanded_max, *range_dates]
+        if value is not None
+    ]
+    if not candidate_dates:
+        st.info("Brak poprawnych dat w przypisaniach.")
+        return
+    min_date = min(candidate_dates)
+    max_date = max(candidate_dates)
     range_sig = f"{min_date.isoformat()}::{max_date.isoformat()}"
     if st.session_state.get("resource_usage_range_sig") != range_sig:
         st.session_state["resource_usage_range_sig"] = range_sig
@@ -3058,12 +3085,22 @@ def render_resource_usage(
     else:
         start_filter, end_filter = min_date, max_date
 
+    if end_filter < start_filter:
+        start_filter, end_filter = end_filter, start_filter
     expanded = expanded[
         (expanded["date"] >= start_filter) & (expanded["date"] <= end_filter)
     ]
     if expanded.empty:
         st.info("Brak przypisań w wybranym zakresie dat.")
         return
+
+    if start_filter == end_filter:
+        domain_start = pd.Timestamp(start_filter) - pd.Timedelta(days=0.5)
+        domain_end = pd.Timestamp(end_filter) + pd.Timedelta(days=0.5)
+    else:
+        domain_start = pd.Timestamp(start_filter)
+        domain_end = pd.Timestamp(end_filter)
+    x_scale = alt.Scale(domain=[domain_start, domain_end], padding=10)
 
     present_constructors = sorted(
         {
@@ -3132,7 +3169,12 @@ def render_resource_usage(
                 alt.Chart(con_df)
                 .mark_bar()
                 .encode(
-                    x=alt.X("date:T", title="Dzień"),
+                    x=alt.X(
+                        "date:T",
+                        title="Dzień",
+                        scale=x_scale,
+                        axis=alt.Axis(format="%d.%m", labelAngle=-45),
+                    ),
                     y=alt.Y("hours:Q", title="Godziny", stack="zero"),
                     color=alt.Color("category_short:N", title="Projekt / zadanie"),
                     tooltip=[
@@ -3146,7 +3188,12 @@ def render_resource_usage(
                 alt.Chart(con_labels)
                 .mark_text(angle=270, dx=-4, dy=0, fontSize=8, color="#444")
                 .encode(
-                    x=alt.X("date:T", title="Dzień"),
+                    x=alt.X(
+                        "date:T",
+                        title="Dzień",
+                        scale=x_scale,
+                        axis=alt.Axis(format="%d.%m", labelAngle=-45),
+                    ),
                     y=alt.Y("total_hours:Q", title=None),
                     text=alt.Text("projects:N"),
                 )
