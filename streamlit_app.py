@@ -71,6 +71,9 @@ DAILY_HOURS_FILE = Path(".cache") / "daily_hours.json"
 COMPLETED_OVERRIDES_FILE = Path(".cache") / "completed_overrides.json"
 CONSTRUCTORS_FILE = Path(".cache") / "constructors.json"
 CONSTRUCTOR_ASSIGNMENTS_FILE = Path(".cache") / "constructor_assignments.json"
+REQUIRED_CONSTRUCTORS_RANGE_FILE = (
+    Path(".cache") / "required_constructors_range.json"
+)
 DEFAULT_CONSTRUCTORS: List[str] = [
     item.strip().upper()
     for item in os.getenv("KONSTRUKTORZY", "").replace(";", ",").split(",")
@@ -164,6 +167,59 @@ def save_constructors(constructors: List[str]) -> None:
     _write_json_file(CONSTRUCTORS_FILE, {"constructors": constructors})
 
 
+def load_required_constructors_range() -> Optional[Tuple[date, date, bool]]:
+    payload = _read_json_file(REQUIRED_CONSTRUCTORS_RANGE_FILE, None)
+    if not isinstance(payload, dict):
+        return None
+    try:
+        start = date.fromisoformat(str(payload.get("start")))
+        end = date.fromisoformat(str(payload.get("end")))
+    except (TypeError, ValueError):
+        return None
+    if end < start:
+        return None
+    return start, end, bool(payload.get("manual", False))
+
+
+def save_required_constructors_range(
+    start: date, end: date, manual: bool = True
+) -> None:
+    _write_json_file(
+        REQUIRED_CONSTRUCTORS_RANGE_FILE,
+        {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "manual": bool(manual),
+        },
+    )
+
+
+def _persist_required_range_from_state() -> None:
+    st.session_state["required_range_manual"] = True
+    start = st.session_state.get("required_range_start")
+    end = st.session_state.get("required_range_end")
+    if isinstance(start, date) and isinstance(end, date) and start <= end:
+        save_required_constructors_range(start, end, True)
+
+
+def _reset_required_range_start(default_start: date, default_end: date) -> None:
+    st.session_state["required_range_start"] = default_start
+    end = st.session_state.get("required_range_end")
+    if isinstance(end, date) and default_start <= end:
+        manual = end != default_end
+        st.session_state["required_range_manual"] = manual
+        save_required_constructors_range(default_start, end, manual)
+
+
+def _reset_required_range_end(default_end: date, default_start: date) -> None:
+    st.session_state["required_range_end"] = default_end
+    start = st.session_state.get("required_range_start")
+    if isinstance(start, date) and start <= default_end:
+        manual = start != default_start
+        st.session_state["required_range_manual"] = manual
+        save_required_constructors_range(start, default_end, manual)
+
+
 def load_constructor_assignments() -> List[Dict[str, Any]]:
     payload = _read_json_file(CONSTRUCTOR_ASSIGNMENTS_FILE, {"assignments": []})
     if isinstance(payload, dict):
@@ -237,6 +293,22 @@ def _init_resource_state() -> None:
             )
         except (TypeError, ValueError):
             st.session_state["effective_daily_hours"] = 6.0
+    if (
+        "required_range_start" not in st.session_state
+        or "required_range_end" not in st.session_state
+    ):
+        persisted_required_range = load_required_constructors_range()
+        if persisted_required_range is not None:
+            persisted_start, persisted_end, persisted_manual = (
+                persisted_required_range
+            )
+            st.session_state.setdefault("required_range_start", persisted_start)
+            st.session_state.setdefault("required_range_end", persisted_end)
+            st.session_state.setdefault(
+                "required_range_manual", persisted_manual
+            )
+    if "required_range_manual" not in st.session_state:
+        st.session_state["required_range_manual"] = False
 
 
 
@@ -2627,15 +2699,9 @@ def render_resource_planning_section(
 
     if st.session_state.get("assign_constructor") not in constructors:
         st.session_state["assign_constructor"] = constructors[0]
-    selected_constructor = st.selectbox(
-        "Konstruktor do przypisania",
-        options=constructors,
-        key="assign_constructor",
-        help=(
-            "Dostępne godziny konstruktora to efektywne godziny dziennie "
-            "pomniejszone o jego wcześniejsze przypisania w danym dniu."
-        ),
-    )
+    # Read the selected constructor before building the table.  The selectbox
+    # itself is rendered below, directly above the assignment buttons.
+    selected_constructor = st.session_state["assign_constructor"]
 
     project_ranges = project_date_ranges(core_df)
     selection = set(st.session_state.get("assignment_selection", set()))
@@ -2748,6 +2814,16 @@ def render_resource_planning_section(
             st.session_state["assignment_selection"] = set()
             st.session_state["assign_editor_nonce"] = nonce + 1
             st.rerun()
+
+        selected_constructor = st.selectbox(
+            "Konstruktor do przypisania",
+            options=constructors,
+            key="assign_constructor",
+            help=(
+                "Dostępne godziny konstruktora to efektywne godziny dziennie "
+                "pomniejszone o jego wcześniejsze przypisania w danym dniu."
+            ),
+        )
 
         full_col, half_col = st.columns(2)
         assign_full = full_col.button(
@@ -3249,6 +3325,148 @@ def render_resource_usage(
                 )
 
 
+def render_required_constructors_section(
+    core_df: pd.DataFrame,
+    daily_df: pd.DataFrame,
+    selected_projects: List[str],
+    effective_daily_hours: float,
+    fallback_start: date,
+    fallback_end: date,
+) -> None:
+    required_project_ranges = project_date_ranges(core_df)
+    selected_project_ranges = [
+        required_project_ranges[project_id]
+        for project_id in selected_projects
+        if project_id in required_project_ranges
+    ]
+    if selected_project_ranges:
+        required_default_start = min(
+            project_start for project_start, _ in selected_project_ranges
+        )
+        required_default_end = max(
+            project_end for _, project_end in selected_project_ranges
+        )
+    else:
+        required_default_start = fallback_start
+        required_default_end = fallback_end
+
+    if "required_range_start" not in st.session_state:
+        st.session_state["required_range_start"] = required_default_start
+    if "required_range_end" not in st.session_state:
+        st.session_state["required_range_end"] = required_default_end
+    if not st.session_state.get("required_range_manual", False):
+        st.session_state["required_range_start"] = required_default_start
+        st.session_state["required_range_end"] = required_default_end
+    required_range_start = st.session_state["required_range_start"]
+    required_range_end = st.session_state["required_range_end"]
+    if not isinstance(required_range_start, date):
+        st.session_state["required_range_start"] = required_default_start
+        required_range_start = required_default_start
+    if not isinstance(required_range_end, date):
+        st.session_state["required_range_end"] = required_default_end
+        required_range_end = required_default_end
+
+    required_range_valid = required_range_start <= required_range_end
+    if required_range_valid:
+        required_daily_df = daily_df[
+            (daily_df["date"] >= required_range_start)
+            & (daily_df["date"] <= required_range_end)
+        ]
+        required_total_h = float(required_daily_df["daily_hours"].sum())
+        required_workdays = int(
+            pd.bdate_range(required_range_start, required_range_end).size
+        )
+        required_capacity_per_person = effective_daily_hours * required_workdays
+        if required_capacity_per_person > 0:
+            required_full_people = int(
+                math.floor(required_total_h / required_capacity_per_person + 1e-9)
+            )
+            required_remainder_hours = max(
+                0.0,
+                required_total_h
+                - required_full_people * required_capacity_per_person,
+            )
+            required_label = format_required_constructors(
+                required_full_people, required_remainder_hours
+            )
+        else:
+            required_full_people = 0
+            required_remainder_hours = 0.0
+            required_label = "—"
+    else:
+        required_total_h = 0.0
+        required_workdays = 0
+        required_capacity_per_person = 0.0
+        required_full_people = 0
+        required_remainder_hours = 0.0
+        required_label = "—"
+
+    required_remainder_text = (
+        f" i {_polish_hours_label(required_remainder_hours)}"
+        if required_remainder_hours >= 0.5
+        else ""
+    )
+    if required_range_valid:
+        required_help = (
+            f"Zakres {required_range_start:%d.%m.%Y}–"
+            f"{required_range_end:%d.%m.%Y}: "
+            f"pojemność jednej osoby {effective_daily_hours:.1f} h × "
+            f"{required_workdays} dni roboczych = "
+            f"{required_capacity_per_person:.1f} h. "
+            f"{required_total_h:.1f} h planu = "
+            f"{_polish_person_label(required_full_people)} full"
+            f"{required_remainder_text}."
+        )
+    else:
+        required_help = (
+            "Wybierz poprawny zakres dat: początek nie może być "
+            "późniejszy niż koniec."
+        )
+
+    st.markdown("**Wymagani konstruktorzy — zakres obliczenia**")
+    req_metric_col, req_start_col, req_end_col = st.columns([1.2, 1, 1])
+    with req_metric_col:
+        st.metric(
+            "Wymagani konstruktorzy",
+            required_label,
+            help=required_help,
+        )
+    with req_start_col:
+        st.date_input(
+            "Początek zakresu",
+            key="required_range_start",
+            on_change=_persist_required_range_from_state,
+        )
+        st.button(
+            "Resetuj początek",
+            key="reset_required_range_start",
+            on_click=_reset_required_range_start,
+            args=(required_default_start, required_default_end),
+        )
+    with req_end_col:
+        st.date_input(
+            "Koniec zakresu",
+            key="required_range_end",
+            on_change=_persist_required_range_from_state,
+        )
+        st.button(
+            "Resetuj koniec",
+            key="reset_required_range_end",
+            on_click=_reset_required_range_end,
+            args=(required_default_end, required_default_start),
+        )
+    st.caption(
+        f"Domyślny zakres projektu: "
+        f"{required_default_start:%d.%m.%Y}–"
+        f"{required_default_end:%d.%m.%Y}."
+    )
+    if not required_range_valid:
+        st.warning(
+            "Data początkowa zakresu wymaganych konstruktorów jest "
+            "późniejsza niż data końcowa."
+        )
+
+
 def main() -> None:
     st.set_page_config(page_title="Wrike KPI – Core Items", layout="wide")
     reset_logs()
@@ -3533,20 +3751,6 @@ def main() -> None:
                     else relevant_assignments
                 )
 
-                capacity_per_person = effective_daily_h * workdays_in_range
-                if capacity_per_person > 0:
-                    full_people = int(math.floor(total_h / capacity_per_person + 1e-9))
-                    remainder_hours = max(
-                        0.0, total_h - full_people * capacity_per_person
-                    )
-                    required_label = format_required_constructors(
-                        full_people, remainder_hours
-                    )
-                else:
-                    full_people = 0
-                    remainder_hours = 0.0
-                    required_label = "—"
-
                 average_daily_h = total_h / workdays_in_range if workdays_in_range else 0.0
                 c1, c2, c3 = st.columns(3)
                 c1.metric(
@@ -3640,23 +3844,14 @@ def main() -> None:
                         ),
                     )
 
-                    remainder_text = (
-                        f" i {_polish_hours_label(remainder_hours)}"
-                        if remainder_hours >= 0.5
-                        else ""
-                    )
-                    st.metric(
-                        "Wymagani konstruktorzy",
-                        required_label,
-                        help=(
-                            f"Pojemność jednej osoby: {effective_daily_h:.1f} h × "
-                            f"{workdays_in_range} dni roboczych = "
-                            f"{capacity_per_person:.1f} h. "
-                            f"{total_h:.1f} h planu = "
-                            f"{_polish_person_label(full_people)} full"
-                            f"{remainder_text}."
-                        ),
-                    )
+        render_required_constructors_section(
+            core_df=core_df,
+            daily_df=daily_df,
+            selected_projects=selected_projects,
+            effective_daily_hours=effective_daily_h,
+            fallback_start=min_date,
+            fallback_end=max_date,
+        )
 
         render_resource_planning_section(
             core_df=core_df,
