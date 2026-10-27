@@ -3486,8 +3486,6 @@ def main() -> None:
         st.divider()
         st.radio("Filtruj zadania", ["ALL", "\u2622 BOM"], horizontal=True, key="task_filter")
         st.radio("Status", ["ALL", "COMPLETED"], horizontal=True, key="status_filter")
-        kpi_date_from = st.date_input("KPI due od", value=None, key="kpi_date_from")
-        kpi_date_to = st.date_input("KPI due do", value=None, key="kpi_date_to")
         kpi1_tolerance_pct = st.number_input(
             "Tolerancja opóźnienia KPI 1 (%)",
             min_value=0,
@@ -3919,43 +3917,14 @@ def main() -> None:
     for idx in range(spec_col_count):
         core_cols.insert(4 + idx, (f"solidworks_pdf_{idx + 1}", f"SPEC {idx + 1}"))
 
-    # ---- Date filter logic ----
-    date_filter_active = kpi_date_from is not None and kpi_date_to is not None
-
-    def _filter_by_due(df: pd.DataFrame) -> pd.DataFrame:
-        if df.empty or "due_date" not in df.columns:
-            return df
-        return df[(df["due_date"] >= kpi_date_from) & (df["due_date"] <= kpi_date_to)]
-
-    if date_filter_active:
-        task_df_kpi = _filter_by_due(task_df)
-        bom_df_kpi = _filter_by_due(bom_df)
-    else:
-        task_df_kpi = task_df
-        bom_df_kpi = bom_df
-
     # ---- KPI recalc ----
-    if date_filter_active:
-        planned_h = int(round(pd.concat(
-            [task_df_kpi.get("planned_hours", pd.Series(dtype=float)),
-             bom_df_kpi.get("planned_hours", pd.Series(dtype=float))], ignore_index=True).sum()))
-        alloc_h = int(round(pd.concat(
-            [task_df_kpi.get("allocated_hours", pd.Series(dtype=float)),
-             bom_df_kpi.get("allocated_hours", pd.Series(dtype=float))], ignore_index=True).sum()))
-        used_series = pd.concat(
-            [task_df_kpi.get("used_hours_until_yesterday", pd.Series(dtype=float)),
-             bom_df_kpi.get("used_hours_until_yesterday", pd.Series(dtype=float))], ignore_index=True).dropna()
-        used_h = int(used_series.sum()) if not used_series.empty else 0
-        planned_missing = int(pd.concat(
-            [task_df_kpi.get("planned_hours", pd.Series(dtype=float)),
-             bom_df_kpi.get("planned_hours", pd.Series(dtype=float))], ignore_index=True).isna().sum())
-        ratio_total = round(alloc_h / planned_h * 100) if planned_h > 0 else None
-    else:
-        planned_h = summary["planned_hours"]
-        alloc_h = summary["allocated_hours"]
-        used_h = summary.get("used_until_yesterday", 0)
-        planned_missing = summary["planned_missing"]
-        ratio_total = round(alloc_h / planned_h * 100) if planned_h > 0 else None
+    task_df_kpi = task_df
+    bom_df_kpi = bom_df
+    planned_h = summary["planned_hours"]
+    alloc_h = summary["allocated_hours"]
+    used_h = summary.get("used_until_yesterday", 0)
+    planned_missing = summary["planned_missing"]
+    ratio_total = round(alloc_h / planned_h * 100) if planned_h > 0 else None
 
     # KPI 1: average delivery-time score for completed BOM items due today or earlier.
     if not bom_df_kpi.empty:
@@ -4021,7 +3990,7 @@ def main() -> None:
         st.metric("Used until yesterday (h)", used_h)
         if ratio_total is not None:
             st.metric("Alloc / Planned", f"{ratio_total}%")
-        if not date_filter_active and summary["time_progress_avg"]:
+        if summary["time_progress_avg"]:
             st.metric("Ścieżka czasu (avg)", f"{summary['time_progress_avg']}%")
     with col2:
         _colored_metric(
@@ -4044,8 +4013,6 @@ def main() -> None:
         display_df = pd.concat([task_df, bom_df], ignore_index=True) if (not task_df.empty or not bom_df.empty) else pd.DataFrame()
     if st.session_state.get("status_filter") == "COMPLETED" and not display_df.empty and "completed" in display_df:
         display_df = display_df[display_df["completed"] == True]
-    if date_filter_active and not display_df.empty:
-        display_df = _filter_by_due(display_df)
     render_df(
         display_df,
         core_cols,
